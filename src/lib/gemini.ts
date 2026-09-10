@@ -70,6 +70,17 @@ export function getAiEngineMode(): "cloud" | "offline_deterministic" {
   return "cloud";
 }
 
+export function getActiveCloudProvider(): "gemini" | "groq" {
+  try {
+    const stmt = db.prepare("SELECT value FROM AppConfig WHERE key = 'ACTIVE_CLOUD_PROVIDER'");
+    const row = stmt.get() as { value: string } | undefined;
+    if (row?.value === "groq" || row?.value === "gemini") {
+      return row.value;
+    }
+  } catch {}
+  return "gemini";
+}
+
 export interface GeminiCascadeResult {
   text: string;
   modelUsed: string;
@@ -77,9 +88,10 @@ export interface GeminiCascadeResult {
 }
 
 /**
- * Executes a call against the Google Gemini API with cascade fallback across models:
- * Strategy "smart_saving": Gemini 3.8 Flash-Lite -> Gemini 3.8 Flash -> null (Motor Local)
- * Strategy "maximum_precision": Gemini 3.8 Flash -> Gemini 3.8 Flash-Lite -> null (Motor Local)
+ * Executes a call against the selected active AI provider with strict mutual exclusivity:
+ * - When activeProvider is "gemini": calls Gemini 3.8 (Flash or Flash-Lite according to strategy)
+ * - When activeProvider is "groq": calls Groq Cloud (Llama 3.3 70B Versatile)
+ * - If offline_deterministic: returns null immediately (0 tokens)
  */
 export async function callGeminiApiWithCascade(
   payload: {
@@ -98,6 +110,55 @@ export async function callGeminiApiWithCascade(
     return null;
   }
 
+  const activeProvider = getActiveCloudProvider();
+
+  // ==========================================================
+  // OPCIÓN 1 EXCLUYENTE: GROQ CLOUD (LLAMA 3.3 70B VERSATILE)
+  // ==========================================================
+  if (activeProvider === "groq") {
+    try {
+      const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
+      for (const c of payload.contents || []) {
+        const role = c.role === "model" ? "assistant" : "user";
+        let text = "";
+        if (Array.isArray(c.parts)) {
+          text = c.parts
+            .map((p: any) => p.text || "")
+            .filter(Boolean)
+            .join("\n\n");
+        } else if (typeof c.text === "string") {
+          text = c.text;
+        }
+        if (text) {
+          messages.push({ role, content: text });
+        }
+      }
+
+      if (messages.length > 0) {
+        console.log("[AI Engine] Ejecutando exclusivamente con Groq Cloud (Llama 3.3 70B)...");
+        const groqResult = await callBackupAiProvider({
+          messages,
+          jsonMode: payload.generationConfig?.responseMimeType === "application/json",
+          temperature: payload.generationConfig?.temperature ?? 0.1,
+        });
+
+        if (groqResult && groqResult.text) {
+          return {
+            text: groqResult.text,
+            modelUsed: groqResult.modelUsed,
+            modelId: groqResult.modelId,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("[AI Engine] Error al consultar Groq Cloud:", err);
+    }
+    return null;
+  }
+
+  // ==========================================================
+  // OPCIÓN 2 EXCLUYENTE: GOOGLE GEMINI 3.8 (FLASH / FLASH-LITE)
+  // ==========================================================
   const apiKey = getGeminiApiKey();
   if (!apiKey || apiKey.trim().length < 10) {
     return null;
@@ -152,47 +213,6 @@ export async function callGeminiApiWithCascade(
     } catch (err) {
       console.warn(`[Gemini Cascade] Error al consultar ${model.label}:`, err);
     }
-  }
-
-  // ==========================================================
-  // LEVEL 3: PROVEEDOR DE RESPALDO MULTI-CLOUD (GROQ / OPENAI)
-  // ==========================================================
-  try {
-    const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
-    for (const c of payload.contents || []) {
-      const role = c.role === "model" ? "assistant" : "user";
-      let text = "";
-      if (Array.isArray(c.parts)) {
-        text = c.parts
-          .map((p: any) => p.text || "")
-          .filter(Boolean)
-          .join("\n\n");
-      } else if (typeof c.text === "string") {
-        text = c.text;
-      }
-      if (text) {
-        messages.push({ role, content: text });
-      }
-    }
-
-    if (messages.length > 0) {
-      console.warn("[Multi-Cloud Cascade] Escalando al proveedor externo de respaldo (Groq / OpenAI)...");
-      const backupResult = await callBackupAiProvider({
-        messages,
-        jsonMode: payload.generationConfig?.responseMimeType === "application/json",
-        temperature: payload.generationConfig?.temperature ?? 0.1,
-      });
-
-      if (backupResult && backupResult.text) {
-        return {
-          text: backupResult.text,
-          modelUsed: backupResult.modelUsed,
-          modelId: backupResult.modelId,
-        };
-      }
-    }
-  } catch (backupErr) {
-    console.warn("[Multi-Cloud Cascade] Fallo en proveedor de respaldo:", backupErr);
   }
 
   return null;

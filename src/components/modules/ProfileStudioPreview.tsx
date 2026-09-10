@@ -37,6 +37,8 @@ export function ProfileStudioPreview() {
     setCvFileName,
     aiEngineMode,
     toggleAiEngineMode,
+    activeCloudProvider,
+    setActiveCloudProvider,
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -902,8 +904,109 @@ export function ProfileStudioPreview() {
             )}
           </GlassCard>
 
+          {/* Banner Informativo de Modo Local Autónomo (0 Tokens) */}
+          {aiEngineMode === "offline_deterministic" && (
+            <div className="p-3.5 rounded-xl bg-cyan-50/90 border border-cyan-300 text-cyan-950 flex items-center justify-between gap-3 text-xs shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <Cpu className="w-5 h-5 text-cyan-700 shrink-0" />
+                <div>
+                  <span className="font-bold text-slate-900">Modo Local Autónomo Activo (0 Tokens)</span>
+                  <p className="text-[11px] text-cyan-900/80 mt-0.5 leading-snug">
+                    Las llamadas a Gemini y Groq están pausadas y bloqueadas. Las casillas de IA se encuentran deshabilitadas para evitar llamadas innecesarias o errores de cuota.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleAiEngineMode("cloud")}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold text-teal-800 bg-white hover:bg-teal-50 border border-teal-300 transition-colors shadow-2xs cursor-pointer shrink-0"
+              >
+                Activar Nube
+              </button>
+            </div>
+          )}
+
+          {/* Selector de Proveedor Cloud Mutuamente Excluyente */}
+          <GlassCard className={`p-4 bg-white/95 border-slate-200 shadow-xs space-y-3 transition-opacity ${
+            aiEngineMode === "offline_deterministic" ? "opacity-50 pointer-events-none select-none" : ""
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-teal-700" />
+                <h4 className="text-xs font-bold text-slate-900">
+                  Motor de IA en la Nube
+                </h4>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                aiEngineMode === "offline_deterministic"
+                  ? "bg-slate-100 text-slate-700 border-slate-300"
+                  : "bg-emerald-100 text-emerald-900 border-emerald-300"
+              }`}>
+                {aiEngineMode === "offline_deterministic"
+                  ? "Pausado (0 Tokens)"
+                  : activeCloudProvider === "gemini"
+                  ? "Activo: Google Gemini"
+                  : "Activo: Groq Cloud"}
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              Selecciona el motor que procesará tus evaluaciones en la nube. Se utiliza <strong>exclusivamente uno a la vez</strong> para evitar consumo duplicado o dispersión de cuota.
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveCloudProvider("gemini")}
+                disabled={aiEngineMode === "offline_deterministic"}
+                className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                  activeCloudProvider === "gemini"
+                    ? "bg-teal-50/90 border-teal-500 text-teal-950 ring-1 ring-teal-400/30 font-bold shadow-xs"
+                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold">Google Gemini 3.8</span>
+                  {activeCloudProvider === "gemini" && (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1 leading-tight font-normal">
+                  Flash y Flash-Lite con OCR nativo de CVs.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveCloudProvider("groq")}
+                disabled={aiEngineMode === "offline_deterministic"}
+                className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                  activeCloudProvider === "groq"
+                    ? "bg-cyan-50/90 border-cyan-500 text-cyan-950 ring-1 ring-cyan-400/30 font-bold shadow-xs"
+                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold">Groq Cloud</span>
+                  {activeCloudProvider === "groq" && (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1 leading-tight font-normal">
+                  Llama 3.3 70B Versatile con latencia ultra baja.
+                </p>
+              </button>
+            </div>
+          </GlassCard>
+
           {/* Gemini 3.8 Flash AI Key & Health Monitoring Card */}
-          <GlassCard className="p-4 sm:p-5 space-y-3 bg-white/90 border-teal-500/30 shadow-xs">
+          <GlassCard className={`p-4 sm:p-5 space-y-3 bg-white/90 shadow-xs transition-all ${
+            aiEngineMode === "offline_deterministic"
+              ? "border-slate-200 opacity-60"
+              : activeCloudProvider === "gemini"
+              ? "border-teal-500/40 ring-1 ring-teal-400/20"
+              : "border-slate-200 opacity-60"
+          }`}>
             <div className="flex items-center justify-between pb-2 border-b border-teal-900/10">
               <div className="flex items-center gap-2">
                 <Key className="w-4 h-4 text-teal-600" />
@@ -912,21 +1015,25 @@ export function ProfileStudioPreview() {
                 </h4>
               </div>
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => checkGeminiStatus(true)}
-                  disabled={isCheckingHealth}
-                  title="Verificar estado de cuota y conectividad en Google AI Studio"
-                  className="p-1 rounded-md text-slate-500 hover:text-teal-700 hover:bg-teal-50 border border-slate-200 transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  <RefreshCw
-                    className={`w-3 h-3 ${isCheckingHealth ? "animate-spin text-teal-600" : ""}`}
-                  />
-                </button>
+                {aiEngineMode === "cloud" && activeCloudProvider === "gemini" && (
+                  <button
+                    type="button"
+                    onClick={() => checkGeminiStatus(true)}
+                    disabled={isCheckingHealth}
+                    title="Verificar estado de cuota y conectividad en Google AI Studio"
+                    className="p-1 rounded-md text-slate-500 hover:text-teal-700 hover:bg-teal-50 border border-slate-200 transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    <RefreshCw
+                      className={`w-3 h-3 ${isCheckingHealth ? "animate-spin text-teal-600" : ""}`}
+                    />
+                  </button>
+                )}
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all ${
                     aiEngineMode === "offline_deterministic"
-                      ? "bg-cyan-100 text-cyan-900 border-cyan-300"
+                      ? "bg-slate-100 text-slate-700 border-slate-300"
+                      : activeCloudProvider !== "gemini"
+                      ? "bg-slate-100 text-slate-600 border-slate-300"
                       : isCheckingHealth
                       ? "bg-teal-50 text-teal-800 border-teal-200"
                       : !hasApiKey
@@ -943,15 +1050,17 @@ export function ProfileStudioPreview() {
                   }`}
                 >
                   {aiEngineMode === "offline_deterministic"
-                    ? "Modo Local (0 Tokens)"
+                    ? "Pausado (0 Tokens)"
+                    : activeCloudProvider !== "gemini"
+                    ? "Inactivo (Usando Groq)"
                     : isCheckingHealth
                     ? "Comprobando..."
                     : !hasApiKey
-                    ? "Motor Local Autónomo"
+                    ? "Sin Clave Configurada"
                     : healthStatus === "operational"
-                    ? "Gemini 3.8 Flash Operativo (Luz Verde)"
+                    ? "Gemini 3.8 Flash Operativo"
                     : healthStatus === "operational_lite"
-                    ? "Gemini 3.8 Flash-Lite Operativo (Luz Verde)"
+                    ? "Gemini 3.8 Flash-Lite Operativo"
                     : healthStatus === "rate_limited"
                     ? aiStrategy === "maximum_precision"
                       ? "Gemini 3.8 Flash: Cuota Excedida (HTTP 429)"
@@ -963,163 +1072,170 @@ export function ProfileStudioPreview() {
               </div>
             </div>
 
-            {aiEngineMode === "offline_deterministic" && (
-              <div className="p-3 rounded-xl bg-cyan-50/90 border border-cyan-300/80 text-cyan-950 flex items-center justify-between gap-3 text-xs shadow-xs">
-                <div className="flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-cyan-600 shrink-0" />
-                  <div>
-                    <span className="font-bold">Modo Local Autónomo Activo</span>
-                    <p className="text-[11px] text-cyan-800/80 mt-0.5">
-                      Las llamadas a Gemini y Groq están pausadas manualmente. Todas las evaluaciones operan a costo cero con el motor determinista.
-                    </p>
-                  </div>
-                </div>
+            {aiEngineMode === "cloud" && activeCloudProvider !== "gemini" && (
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-xs">
+                <span className="text-[11px] text-slate-600">
+                  Proveedor en espera. Groq Cloud está procesando las solicitudes.
+                </span>
                 <button
                   type="button"
-                  onClick={() => toggleAiEngineMode("cloud")}
+                  onClick={() => setActiveCloudProvider("gemini")}
                   className="px-2.5 py-1 rounded-lg text-xs font-bold text-teal-800 bg-white hover:bg-teal-50 border border-teal-300 transition-colors shadow-2xs cursor-pointer shrink-0"
                 >
-                  Activar Nube
+                  Activar Gemini
                 </button>
               </div>
             )}
 
-            <div className="text-[11px] text-slate-600 leading-relaxed space-y-1.5">
-              {hasApiKey ? (
-                <>
+            <div className={`space-y-3 transition-opacity ${
+              aiEngineMode === "offline_deterministic" || activeCloudProvider !== "gemini"
+                ? "opacity-40 pointer-events-none select-none"
+                : ""
+            }`}>
+              <div className="text-[11px] text-slate-600 leading-relaxed space-y-1.5">
+                {hasApiKey ? (
+                  <>
+                    <p>
+                      <span className="font-semibold text-slate-800">Clave activa:</span> {maskedApiKey}. {statusMessage}
+                    </p>
+                    {healthStatus === "rate_limited" && aiStrategy === "maximum_precision" && (
+                      <div className="text-amber-900 bg-amber-50 p-2.5 rounded-xl border border-amber-200 font-medium space-y-1">
+                        <p className="font-semibold">Cuota excedida en Gemini 3.8 Flash (HTTP 429).</p>
+                        <p className="text-[10px] text-amber-800">
+                          La cuota de Flash principal está agotada en Google AI Studio. Cambia a la pestaña <strong>Ahorro Inteligente</strong> para recibir luz verde y trabajar de inmediato con Gemini 3.8 Flash-Lite.
+                        </p>
+                      </div>
+                    )}
+                    {healthStatus === "operational_lite" && aiStrategy === "smart_saving" && (
+                      <div className="text-emerald-900 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 font-medium space-y-1">
+                        <p className="font-semibold">Luz verde para trabajar con IA (Gemini 3.8 Flash-Lite).</p>
+                        <p className="text-[10px] text-emerald-800">
+                          Cuota activa y disponible en Google AI Studio. Tus evaluaciones de CV y vacantes se procesan en la nube con consumo reducido de tokens.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
                   <p>
-                    <span className="font-semibold text-slate-800">Clave activa:</span> {maskedApiKey}. {statusMessage}
+                    GlassMatch opera actualmente con el Motor Local Autónomo determinista. Puedes conectar tu propia clave gratuita de Google AI Studio para habilitar Gemini 3.8.
                   </p>
-                  {healthStatus === "rate_limited" && aiStrategy === "maximum_precision" && (
-                    <div className="text-amber-900 bg-amber-50 p-2.5 rounded-xl border border-amber-200 font-medium space-y-1">
-                      <p className="font-semibold">Cuota excedida en Gemini 3.8 Flash (HTTP 429).</p>
-                      <p className="text-[10px] text-amber-800">
-                        La cuota de Flash principal está agotada en Google AI Studio. Cambia a la pestaña <strong>Ahorro Inteligente</strong> para recibir luz verde y trabajar de inmediato con Gemini 3.8 Flash-Lite.
-                      </p>
-                    </div>
-                  )}
-                  {healthStatus === "operational_lite" && aiStrategy === "smart_saving" && (
-                    <div className="text-emerald-900 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 font-medium space-y-1">
-                      <p className="font-semibold">Luz verde para trabajar con IA (Gemini 3.8 Flash-Lite).</p>
-                      <p className="text-[10px] text-emerald-800">
-                        Cuota activa y disponible en Google AI Studio. Tus evaluaciones de CV y vacantes se procesan en la nube con consumo reducido de tokens.
-                      </p>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p>
-                  GlassMatch opera actualmente con el Motor Local Autónomo determinista. Puedes conectar tu propia clave gratuita de Google AI Studio para habilitar Gemini 3.8.
-                </p>
-              )}
-            </div>
-
-            {/* Selector de Estrategia de IA y Cascada de Modelos */}
-            <div className="pt-2 border-t border-teal-900/10 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="block text-[11px] font-bold text-slate-800">
-                  Estrategia de Modelos (Gemini 3.8):
-                </label>
-                {isUpdatingStrategy && (
-                  <span className="text-[10px] text-teal-700 animate-pulse font-medium">
-                    Actualizando...
-                  </span>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleStrategyChange("smart_saving")}
-                  disabled={isUpdatingStrategy}
-                  className={`p-2 rounded-xl text-left border transition-all cursor-pointer ${
-                    aiStrategy === "smart_saving"
-                      ? "bg-teal-50/90 border-teal-500 text-teal-950 ring-1 ring-teal-400/30"
-                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold">Ahorro Inteligente</span>
-                    {aiStrategy === "smart_saving" && (
-                      <CheckCircle2 className="w-3 h-3 text-teal-600 shrink-0" />
-                    )}
-                  </div>
-                  <p className="text-[9px] text-slate-500 mt-0.5 leading-tight">
-                    Prioriza Flash-Lite para economizar tokens y conmuta ante 429.
-                  </p>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleStrategyChange("maximum_precision")}
-                  disabled={isUpdatingStrategy}
-                  className={`p-2 rounded-xl text-left border transition-all cursor-pointer ${
-                    aiStrategy === "maximum_precision"
-                      ? "bg-teal-50/90 border-teal-500 text-teal-950 ring-1 ring-teal-400/30"
-                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold">Máxima Precisión</span>
-                    {aiStrategy === "maximum_precision" && (
-                      <CheckCircle2 className="w-3 h-3 text-teal-600 shrink-0" />
-                    )}
-                  </div>
-                  <p className="text-[9px] text-slate-500 mt-0.5 leading-tight">
-                    Prioriza Flash para máxima profundidad analítica ATS.
-                  </p>
-                </button>
+              {/* Selector de Estrategia de IA y Cascada de Modelos */}
+              <div className="pt-2 border-t border-teal-900/10 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-bold text-slate-800">
+                    Estrategia de Modelos (Gemini 3.8):
+                  </label>
+                  {isUpdatingStrategy && (
+                    <span className="text-[10px] text-teal-700 animate-pulse font-medium">
+                      Actualizando...
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleStrategyChange("smart_saving")}
+                    disabled={isUpdatingStrategy || aiEngineMode === "offline_deterministic" || activeCloudProvider !== "gemini"}
+                    className={`p-2 rounded-xl text-left border transition-all cursor-pointer ${
+                      aiStrategy === "smart_saving"
+                        ? "bg-teal-50/90 border-teal-500 text-teal-950 ring-1 ring-teal-400/30"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold">Ahorro Inteligente</span>
+                      {aiStrategy === "smart_saving" && (
+                        <CheckCircle2 className="w-3 h-3 text-teal-600 shrink-0" />
+                      )}
+                    </div>
+                    <p className="text-[9px] text-slate-500 mt-0.5 leading-tight">
+                      Prioriza Flash-Lite para economizar tokens y conmuta ante 429.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleStrategyChange("maximum_precision")}
+                    disabled={isUpdatingStrategy || aiEngineMode === "offline_deterministic" || activeCloudProvider !== "gemini"}
+                    className={`p-2 rounded-xl text-left border transition-all cursor-pointer ${
+                      aiStrategy === "maximum_precision"
+                        ? "bg-teal-50/90 border-teal-500 text-teal-950 ring-1 ring-teal-400/30"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold">Máxima Precisión</span>
+                      {aiStrategy === "maximum_precision" && (
+                        <CheckCircle2 className="w-3 h-3 text-teal-600 shrink-0" />
+                      )}
+                    </div>
+                    <p className="text-[9px] text-slate-500 mt-0.5 leading-tight">
+                      Prioriza Flash para máxima profundidad analítica ATS.
+                    </p>
+                  </button>
+                </div>
               </div>
+
+              <form onSubmit={handleSaveApiKey} className="space-y-2 pt-1">
+                <div className="flex gap-1.5">
+                  <input
+                    type="password"
+                    placeholder={hasApiKey ? "Cambiar API Key..." : "Pega tu Gemini API Key..."}
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    disabled={aiEngineMode === "offline_deterministic" || activeCloudProvider !== "gemini"}
+                    className="flex-1 h-8 px-2.5 rounded-xl bg-white border border-teal-900/15 text-slate-900 text-xs focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-400/20"
+                  />
+                  <GlassButton
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    isLoading={isSavingKey}
+                    disabled={!apiKeyInput.trim() || aiEngineMode === "offline_deterministic" || activeCloudProvider !== "gemini"}
+                  >
+                    Guardar
+                  </GlassButton>
+                </div>
+
+                {keyNotice && (
+                  <p className="text-[11px] font-bold text-teal-700">
+                    {keyNotice}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between pt-1 text-[10px] text-slate-500">
+                  <span>¿No tienes clave?</span>
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-teal-700 font-bold hover:underline cursor-pointer"
+                  >
+                    <span>Obtener clave gratis en Google AI Studio</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={handleSaveApiKey} className="space-y-2 pt-1">
-              <div className="flex gap-1.5">
-                <input
-                  type="password"
-                  placeholder={hasApiKey ? "Cambiar API Key..." : "Pega tu Gemini API Key..."}
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                  className="flex-1 h-8 px-2.5 rounded-xl bg-white border border-teal-900/15 text-slate-900 text-xs focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-400/20"
-                />
-                <GlassButton
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  isLoading={isSavingKey}
-                  disabled={!apiKeyInput.trim()}
-                >
-                  Guardar
-                </GlassButton>
-              </div>
-
-              {keyNotice && (
-                <p className="text-[11px] font-bold text-teal-700">
-                  {keyNotice}
-                </p>
-              )}
-
-              <div className="flex items-center justify-between pt-1 text-[10px] text-slate-500">
-                <span>¿No tienes clave?</span>
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-teal-700 font-bold hover:underline cursor-pointer"
-                >
-                  <span>Obtener clave gratis en Google AI Studio</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-            </form>
           </GlassCard>
 
-          {/* Groq Cloud Multi-Cloud Backup AI Card */}
-          <GlassCard className="p-4 sm:p-5 space-y-3 bg-white/90 border-cyan-500/30 shadow-xs">
+          {/* Groq Cloud AI Card */}
+          <GlassCard className={`p-4 sm:p-5 space-y-3 bg-white/90 shadow-xs transition-all ${
+            aiEngineMode === "offline_deterministic"
+              ? "border-slate-200 opacity-60"
+              : activeCloudProvider === "groq"
+              ? "border-cyan-500/40 ring-1 ring-cyan-400/20"
+              : "border-slate-200 opacity-60"
+          }`}>
             <div className="flex items-center justify-between pb-2 border-b border-cyan-900/10">
               <div className="flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-cyan-600" />
                 <div>
                   <h4 className="text-xs font-bold text-slate-900">
-                    Respaldo Externo: Groq Cloud
+                    Groq Cloud (Llama 3.3 70B)
                   </h4>
                   <p className="text-[10px] text-slate-500 font-mono">
                     Llama 3.3 70B Versatile
@@ -1127,20 +1243,28 @@ export function ProfileStudioPreview() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => checkBackupAiStatus(true)}
-                  disabled={isCheckingBackupHealth}
-                  title="Verificar conexión con Groq Cloud"
-                  className="p-1 rounded-md text-slate-500 hover:text-cyan-700 hover:bg-cyan-50 border border-slate-200 transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  <RefreshCw
-                    className={`w-3 h-3 ${isCheckingBackupHealth ? "animate-spin text-cyan-600" : ""}`}
-                  />
-                </button>
+                {aiEngineMode === "cloud" && activeCloudProvider === "groq" && (
+                  <button
+                    type="button"
+                    onClick={() => checkBackupAiStatus(true)}
+                    disabled={isCheckingBackupHealth}
+                    title="Verificar conexión con Groq Cloud"
+                    className="p-1 rounded-md text-slate-500 hover:text-cyan-700 hover:bg-cyan-50 border border-slate-200 transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    <RefreshCw
+                      className={`w-3 h-3 ${isCheckingBackupHealth ? "animate-spin text-cyan-600" : ""}`}
+                    />
+                  </button>
+                )}
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all ${
-                    !hasBackupKey
+                    aiEngineMode === "offline_deterministic"
+                      ? "bg-slate-100 text-slate-700 border-slate-300"
+                      : activeCloudProvider !== "groq"
+                      ? "bg-slate-100 text-slate-600 border-slate-300"
+                      : isCheckingBackupHealth
+                      ? "bg-cyan-50 text-cyan-800 border-cyan-200"
+                      : !hasBackupKey
                       ? "bg-slate-100 text-slate-700 border-slate-300"
                       : backupHealthStatus === "operational"
                       ? "bg-emerald-100 text-emerald-900 border-emerald-300"
@@ -1151,10 +1275,14 @@ export function ProfileStudioPreview() {
                       : "bg-cyan-50 text-cyan-800 border-cyan-200"
                   }`}
                 >
-                  {isCheckingBackupHealth
+                  {aiEngineMode === "offline_deterministic"
+                    ? "Pausado (0 Tokens)"
+                    : activeCloudProvider !== "groq"
+                    ? "Inactivo (Usando Gemini)"
+                    : isCheckingBackupHealth
                     ? "Comprobando..."
                     : !hasBackupKey
-                    ? "Sin Respaldo Configurado"
+                    ? "Sin Clave Configurada"
                     : backupHealthStatus === "operational"
                     ? "Groq 70B Operativo (Luz Verde)"
                     : backupHealthStatus === "rate_limited"
@@ -1166,62 +1294,84 @@ export function ProfileStudioPreview() {
               </div>
             </div>
 
-            <div className="text-[11px] text-slate-600 leading-relaxed space-y-1.5">
-              {hasBackupKey ? (
-                <>
+            {aiEngineMode === "cloud" && activeCloudProvider !== "groq" && (
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-xs">
+                <span className="text-[11px] text-slate-600">
+                  Proveedor en espera. Google Gemini está procesando las solicitudes.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveCloudProvider("groq")}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-cyan-800 bg-white hover:bg-cyan-50 border border-cyan-300 transition-colors shadow-2xs cursor-pointer shrink-0"
+                >
+                  Activar Groq
+                </button>
+              </div>
+            )}
+
+            <div className={`space-y-3 transition-opacity ${
+              aiEngineMode === "offline_deterministic" || activeCloudProvider !== "groq"
+                ? "opacity-40 pointer-events-none select-none"
+                : ""
+            }`}>
+              <div className="text-[11px] text-slate-600 leading-relaxed space-y-1.5">
+                {hasBackupKey ? (
+                  <>
+                    <p>
+                      <span className="font-semibold text-slate-800">Clave de Groq:</span> {maskedBackupKey}. {backupStatusMessage}
+                    </p>
+                    <div className="text-cyan-950 bg-cyan-50/70 p-2.5 rounded-xl border border-cyan-200/80 font-medium text-[10px]">
+                      Llama 3.3 70B Versatile ejecutándose en la infraestructura LPU de Groq Cloud para máxima velocidad analítica.
+                    </div>
+                  </>
+                ) : (
                   <p>
-                    <span className="font-semibold text-slate-800">Clave de respaldo:</span> {maskedBackupKey}. {backupStatusMessage}
+                    Conecta una clave gratuita de Groq Cloud para habilitar Llama 3.3 70B como alternativa a Gemini.
                   </p>
-                  <div className="text-cyan-950 bg-cyan-50/70 p-2.5 rounded-xl border border-cyan-200/80 font-medium text-[10px]">
-                    Si Google AI Studio agota su cuota en Flash y Flash-Lite, GlassMatch conmutará automáticamente a Groq Llama 3.3 70B para no detener el radar ni tus análisis.
-                  </div>
-                </>
-              ) : (
-                <p>
-                  Conecta una clave gratuita de Groq Cloud para tener respaldo multi-nube ilimitado y evitar depender únicamente de la cuota de Google.
-                </p>
-              )}
+                )}
+              </div>
+
+              <form onSubmit={handleSaveBackupKey} className="space-y-2 pt-1">
+                <div className="flex gap-1.5">
+                  <input
+                    type="password"
+                    placeholder={hasBackupKey ? "Cambiar API Key de Groq..." : "Pega tu Groq API Key (gsk_...)"}
+                    value={backupKeyInput}
+                    onChange={(e) => setBackupKeyInput(e.target.value)}
+                    disabled={aiEngineMode === "offline_deterministic" || activeCloudProvider !== "groq"}
+                    className="flex-1 h-8 px-2.5 rounded-xl bg-white border border-cyan-900/15 text-slate-900 text-xs focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-400/20"
+                  />
+                  <GlassButton
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    isLoading={isSavingBackupKey}
+                    disabled={!backupKeyInput.trim() || aiEngineMode === "offline_deterministic" || activeCloudProvider !== "groq"}
+                  >
+                    Guardar
+                  </GlassButton>
+                </div>
+
+                {backupKeyNotice && (
+                  <p className="text-[11px] font-bold text-cyan-700">
+                    {backupKeyNotice}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between pt-1 text-[10px] text-slate-500">
+                  <span>¿No tienes clave de Groq?</span>
+                  <a
+                    href="https://console.groq.com/keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-cyan-700 font-bold hover:underline cursor-pointer"
+                  >
+                    <span>Obtener clave gratis en Groq Cloud</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={handleSaveBackupKey} className="space-y-2 pt-1">
-              <div className="flex gap-1.5">
-                <input
-                  type="password"
-                  placeholder={hasBackupKey ? "Cambiar API Key de Groq..." : "Pega tu Groq API Key (gsk_...)"}
-                  value={backupKeyInput}
-                  onChange={(e) => setBackupKeyInput(e.target.value)}
-                  className="flex-1 h-8 px-2.5 rounded-xl bg-white border border-cyan-900/15 text-slate-900 text-xs focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-400/20"
-                />
-                <GlassButton
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  isLoading={isSavingBackupKey}
-                  disabled={!backupKeyInput.trim()}
-                >
-                  Guardar
-                </GlassButton>
-              </div>
-
-              {backupKeyNotice && (
-                <p className="text-[11px] font-bold text-cyan-700">
-                  {backupKeyNotice}
-                </p>
-              )}
-
-              <div className="flex items-center justify-between pt-1 text-[10px] text-slate-500">
-                <span>¿No tienes clave de Groq?</span>
-                <a
-                  href="https://console.groq.com/keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-cyan-700 font-bold hover:underline cursor-pointer"
-                >
-                  <span>Obtener clave gratis en Groq Cloud</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-            </form>
           </GlassCard>
         </div>
       </div>

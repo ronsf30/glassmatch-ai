@@ -15,6 +15,13 @@ export async function GET(req: Request) {
         ? modeRow.value
         : "cloud";
 
+      const providerRow = db
+        .prepare("SELECT value FROM AppConfig WHERE key = 'ACTIVE_CLOUD_PROVIDER'")
+        .get() as { value: string } | undefined;
+      const activeCloudProvider = (providerRow?.value === "groq" || providerRow?.value === "gemini")
+        ? providerRow.value
+        : "gemini";
+
       return NextResponse.json({
         hasKey: false,
         isConfigured: false,
@@ -22,6 +29,7 @@ export async function GET(req: Request) {
         healthStatus: "no_key",
         statusMessage: "Sin clave configurada • Operando con Motor Local Autónomo",
         aiEngineMode,
+        activeCloudProvider,
       });
     }
 
@@ -48,6 +56,13 @@ export async function GET(req: Request) {
     const aiEngineMode = (modeRow?.value === "offline_deterministic" || modeRow?.value === "cloud")
       ? modeRow.value
       : "cloud";
+
+    const providerRow = db
+      .prepare("SELECT value FROM AppConfig WHERE key = 'ACTIVE_CLOUD_PROVIDER'")
+      .get() as { value: string } | undefined;
+    const activeCloudProvider = (providerRow?.value === "groq" || providerRow?.value === "gemini")
+      ? providerRow.value
+      : "gemini";
 
     let healthStatus:
       | "operational"
@@ -140,6 +155,7 @@ export async function GET(req: Request) {
       activeModel,
       aiStrategy,
       aiEngineMode,
+      activeCloudProvider,
       flashAvailable,
       flashLiteAvailable,
       httpCode,
@@ -153,10 +169,11 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { apiKey, aiStrategy, aiEngineMode } = body as {
+    const { apiKey, aiStrategy, aiEngineMode, activeCloudProvider } = body as {
       apiKey?: string;
       aiStrategy?: string;
       aiEngineMode?: string;
+      activeCloudProvider?: string;
     };
 
     const now = new Date().toISOString();
@@ -188,6 +205,14 @@ export async function POST(req: Request) {
       `).run(aiEngineMode, now);
     }
 
+    if (activeCloudProvider && (activeCloudProvider === "gemini" || activeCloudProvider === "groq")) {
+      db.prepare(`
+        INSERT INTO AppConfig (key, value, updatedAt)
+        VALUES ('ACTIVE_CLOUD_PROVIDER', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt
+      `).run(activeCloudProvider, now);
+    }
+
     const row = db
       .prepare("SELECT value FROM AppConfig WHERE key = 'GEMINI_API_KEY'")
       .get() as { value: string } | undefined;
@@ -204,6 +229,13 @@ export async function POST(req: Request) {
       ? currentModeRow.value
       : "cloud";
 
+    const currentProviderRow = db
+      .prepare("SELECT value FROM AppConfig WHERE key = 'ACTIVE_CLOUD_PROVIDER'")
+      .get() as { value: string } | undefined;
+    const resolvedProvider = (currentProviderRow?.value === "groq" || currentProviderRow?.value === "gemini")
+      ? currentProviderRow.value
+      : "gemini";
+
     return NextResponse.json({
       success: true,
       hasKey: currentKey.length > 10,
@@ -211,6 +243,7 @@ export async function POST(req: Request) {
       maskedKey,
       aiStrategy: aiStrategy || "smart_saving",
       aiEngineMode: resolvedMode,
+      activeCloudProvider: resolvedProvider,
     });
   } catch (error) {
     return NextResponse.json({ error: "Error al guardar en AppConfig" }, { status: 500 });

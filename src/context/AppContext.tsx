@@ -23,6 +23,8 @@ interface AppContextType {
   isLoadingDb: boolean;
   aiEngineMode: "cloud" | "offline_deterministic";
   toggleAiEngineMode: (mode: "cloud" | "offline_deterministic") => Promise<void>;
+  activeCloudProvider: "gemini" | "groq";
+  setActiveCloudProvider: (provider: "gemini" | "groq") => Promise<void>;
   toastMessage: string | null;
   showToast: (msg: string) => void;
 }
@@ -89,6 +91,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingDb, setIsLoadingDb] = useState(true);
   const [isRerolling, setIsRerolling] = useState(false);
   const [aiEngineMode, setAiEngineMode] = useState<"cloud" | "offline_deterministic">("cloud");
+  const [activeCloudProvider, setActiveCloudProviderState] = useState<"gemini" | "groq">("gemini");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -115,6 +118,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             configData.aiEngineMode === "cloud"
           ) {
             setAiEngineMode(configData.aiEngineMode);
+          }
+          if (configData.activeCloudProvider === "groq" || configData.activeCloudProvider === "gemini") {
+            setActiveCloudProviderState(configData.activeCloudProvider);
           }
         }
 
@@ -393,7 +399,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const toggleAiEngineMode = async (mode: "cloud" | "offline_deterministic") => {
     setAiEngineMode(mode);
     if (mode === "cloud") {
-      showToast("Modo IA Nube Activado: Conectado a Gemini 3.8 con respaldo Groq Cloud.");
+      showToast("Modo IA Nube Activado: Conectado a modelos en la nube.");
     } else {
       showToast("Modo Local Activado: Operando a costo cero con motor determinista (0 tokens).");
     }
@@ -405,6 +411,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
     } catch (e) {
       console.warn("Error persisting aiEngineMode:", e);
+    }
+  };
+
+  const setActiveCloudProvider = async (provider: "gemini" | "groq") => {
+    setActiveCloudProviderState(provider);
+    if (provider === "gemini") {
+      showToast("Proveedor Activo: Google Gemini 3.8");
+    } else {
+      showToast("Proveedor Activo: Groq Cloud (Llama 3.3 70B)");
+    }
+    try {
+      await fetch("/api/config/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activeCloudProvider: provider }),
+      });
+    } catch (e) {
+      console.warn("Error persisting activeCloudProvider:", e);
     }
   };
 
@@ -430,6 +454,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isLoadingDb,
         aiEngineMode,
         toggleAiEngineMode,
+        activeCloudProvider,
+        setActiveCloudProvider,
         toastMessage,
         showToast,
       }}
