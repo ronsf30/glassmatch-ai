@@ -11,23 +11,17 @@ import { QuickAddModal } from "@/components/modules/QuickAddModal";
 import { SyncJobsModal } from "@/components/modules/SyncJobsModal";
 import { TutorialModal } from "@/components/modules/TutorialModal";
 import { ActiveTab, JobOffer } from "@/types";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Cloud, Cpu } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 function GlassMatchApp() {
-  const { updateJobStatus } = useApp();
+  const { updateJobStatus, toastMessage, showToast } = useApp();
   const [activeTab, setActiveTab] = useState<ActiveTab>("radar");
   const [selectedJob, setSelectedJob] = useState<JobOffer | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isSyncOpen, setIsSyncOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
 
   const handleSelectJob = (job: JobOffer) => {
     setSelectedJob(job);
@@ -158,9 +152,21 @@ function GlassMatchApp() {
             initial={{ opacity: 0, y: 20, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-white/95 backdrop-blur-2xl border border-teal-500/40 text-xs font-bold text-teal-950 shadow-[0_12px_36px_rgba(13,148,136,0.2)]"
+            className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl backdrop-blur-2xl text-xs font-bold shadow-xl border ${
+              toastMessage.includes("Modo Local")
+                ? "bg-slate-900/95 text-cyan-200 border-cyan-500/40 shadow-[0_12px_36px_rgba(6,182,212,0.25)]"
+                : toastMessage.includes("Modo IA Nube")
+                ? "bg-slate-900/95 text-emerald-200 border-emerald-500/40 shadow-[0_12px_36px_rgba(16,185,129,0.25)]"
+                : "bg-white/95 text-teal-950 border-teal-500/40 shadow-[0_12px_36px_rgba(13,148,136,0.2)]"
+            }`}
           >
-            <Sparkles className="w-4 h-4 text-teal-600" />
+            {toastMessage.includes("Modo Local") ? (
+              <Cpu className="w-4 h-4 text-cyan-400 animate-pulse" />
+            ) : toastMessage.includes("Modo IA Nube") ? (
+              <Cloud className="w-4 h-4 text-emerald-400 animate-pulse" />
+            ) : (
+              <Sparkles className="w-4 h-4 text-teal-600" />
+            )}
             <span>{toastMessage}</span>
           </motion.div>
         )}

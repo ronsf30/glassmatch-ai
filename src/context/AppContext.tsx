@@ -23,6 +23,8 @@ interface AppContextType {
   isLoadingDb: boolean;
   aiEngineMode: "cloud" | "offline_deterministic";
   toggleAiEngineMode: (mode: "cloud" | "offline_deterministic") => Promise<void>;
+  toastMessage: string | null;
+  showToast: (msg: string) => void;
 }
 
 const INITIAL_PROFILE: UserProfile = {
@@ -87,6 +89,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingDb, setIsLoadingDb] = useState(true);
   const [isRerolling, setIsRerolling] = useState(false);
   const [aiEngineMode, setAiEngineMode] = useState<"cloud" | "offline_deterministic">("cloud");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((current) => (current === msg ? null : current));
+    }, 4500);
+  };
 
   // Load state from local SQLite on initial mount
   useEffect(() => {
@@ -382,6 +392,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const toggleAiEngineMode = async (mode: "cloud" | "offline_deterministic") => {
     setAiEngineMode(mode);
+    if (mode === "cloud") {
+      showToast("Modo IA Nube Activado: Conectado a Gemini 3.8 con respaldo Groq Cloud.");
+    } else {
+      showToast("Modo Local Activado: Operando a costo cero con motor determinista (0 tokens).");
+    }
     try {
       await fetch("/api/config/gemini", {
         method: "POST",
@@ -415,6 +430,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isLoadingDb,
         aiEngineMode,
         toggleAiEngineMode,
+        toastMessage,
+        showToast,
       }}
     >
       {children}

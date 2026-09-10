@@ -35,6 +35,8 @@ export function ProfileStudioPreview() {
     removeExcludedSkill,
     cvFileName,
     setCvFileName,
+    aiEngineMode,
+    toggleAiEngineMode,
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -918,7 +920,11 @@ export function ProfileStudioPreview() {
                 </button>
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all ${
-                    !hasApiKey
+                    aiEngineMode === "offline_deterministic"
+                      ? "bg-cyan-100 text-cyan-900 border-cyan-300"
+                      : isCheckingHealth
+                      ? "bg-teal-50 text-teal-800 border-teal-200"
+                      : !hasApiKey
                       ? "bg-slate-100 text-slate-700 border-slate-300"
                       : healthStatus === "operational"
                       ? "bg-emerald-100 text-emerald-900 border-emerald-300"
@@ -931,7 +937,9 @@ export function ProfileStudioPreview() {
                       : "bg-teal-50 text-teal-800 border-teal-200"
                   }`}
                 >
-                  {isCheckingHealth
+                  {aiEngineMode === "offline_deterministic"
+                    ? "Modo Local (0 Tokens)"
+                    : isCheckingHealth
                     ? "Comprobando..."
                     : !hasApiKey
                     ? "Motor Local Autónomo"
@@ -949,6 +957,27 @@ export function ProfileStudioPreview() {
                 </span>
               </div>
             </div>
+
+            {aiEngineMode === "offline_deterministic" && (
+              <div className="p-3 rounded-xl bg-cyan-50/90 border border-cyan-300/80 text-cyan-950 flex items-center justify-between gap-3 text-xs shadow-xs">
+                <div className="flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-cyan-600 shrink-0" />
+                  <div>
+                    <span className="font-bold">Modo Local Autónomo Activo</span>
+                    <p className="text-[11px] text-cyan-800/80 mt-0.5">
+                      Las llamadas a Gemini y Groq están pausadas manualmente. Todas las evaluaciones operan a costo cero con el motor determinista.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleAiEngineMode("cloud")}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-teal-800 bg-white hover:bg-teal-50 border border-teal-300 transition-colors shadow-2xs cursor-pointer shrink-0"
+                >
+                  Activar Nube
+                </button>
+              </div>
+            )}
 
             <div className="text-[11px] text-slate-600 leading-relaxed space-y-1.5">
               {hasApiKey ? (

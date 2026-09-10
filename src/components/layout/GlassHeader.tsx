@@ -45,12 +45,12 @@ export function GlassHeader({
   return (
     <header className="sticky top-3 sm:top-5 z-40 w-full max-w-6xl mx-auto px-4 sm:px-6">
       <div className="relative flex items-center justify-between h-16 px-4 sm:px-6 rounded-2xl bg-white/80 backdrop-blur-2xl border border-white/90 shadow-[0_10px_32px_0_rgba(13,148,136,0.08)] before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-teal-400/30 before:to-transparent before:rounded-t-2xl">
-        {/* Brand Logo */}
-        <div className="flex items-center gap-3">
-          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-teal-400/25 via-cyan-400/20 to-teal-600/20 border border-teal-500/30 shadow-[0_0_20px_rgba(20,184,166,0.25)]">
+        {/* Brand Logo & Engine Switch */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-teal-400/25 via-cyan-400/20 to-teal-600/20 border border-teal-500/30 shadow-[0_0_20px_rgba(20,184,166,0.25)] shrink-0">
             <Sparkles className="w-5 h-5 text-teal-600 animate-pulse" />
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col pr-1">
             <div className="flex items-center gap-1.5">
               <span className="text-base sm:text-lg font-bold tracking-tight text-slate-900">
                 GlassMatch
@@ -59,9 +59,53 @@ export function GlassHeader({
                 AI
               </span>
             </div>
-            <span className="text-[11px] text-teal-800/70 font-medium hidden sm:inline">
+            <span className="text-[11px] text-teal-800/70 font-medium hidden xl:inline">
               Caribbean Sea Glass Edition
             </span>
+          </div>
+
+          {/* Dual Pill Switch (Desktop - Integrated with Logo) */}
+          <div className="hidden lg:flex items-center p-0.5 rounded-xl bg-slate-100/90 border border-teal-900/10 backdrop-blur-md shadow-2xs ml-1">
+            <button
+              type="button"
+              onClick={() => toggleAiEngineMode("cloud")}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer",
+                aiEngineMode === "cloud"
+                  ? "bg-white text-teal-950 shadow-xs border border-teal-500/25 font-bold"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-white/40 border border-transparent"
+              )}
+              title="Modo IA Nube: Análisis semántico con Gemini 3.8 y respaldo Groq"
+            >
+              <span
+                className={cn(
+                  "w-1.5 h-1.5 rounded-full",
+                  aiEngineMode === "cloud" ? "bg-emerald-500 animate-pulse" : "bg-slate-300"
+                )}
+              />
+              <Cloud className="w-3.5 h-3.5 text-teal-600" />
+              <span>Nube</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleAiEngineMode("offline_deterministic")}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer",
+                aiEngineMode === "offline_deterministic"
+                  ? "bg-white text-teal-950 shadow-xs border border-teal-500/25 font-bold"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-white/40 border border-transparent"
+              )}
+              title="Modo Local: Motor determinista a costo cero (0 Tokens)"
+            >
+              <span
+                className={cn(
+                  "w-1.5 h-1.5 rounded-full",
+                  aiEngineMode === "offline_deterministic" ? "bg-cyan-500" : "bg-slate-300"
+                )}
+              />
+              <Cpu className="w-3.5 h-3.5 text-cyan-600" />
+              <span>0 Tokens</span>
+            </button>
           </div>
         </div>
 
@@ -89,53 +133,9 @@ export function GlassHeader({
           })}
         </nav>
 
-        {/* Right Actions: Switch Modo IA + Tutorial + Sincronizar + Nueva Vacante */}
+        {/* Right Actions: Tutorial + Sincronizar + Nueva Vacante */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Dual Pill Switch (Desktop) */}
-          <div className="hidden md:flex items-center p-0.5 rounded-xl bg-slate-100/80 border border-teal-900/10 backdrop-blur-md shadow-2xs mr-1">
-            <button
-              type="button"
-              onClick={() => toggleAiEngineMode("cloud")}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer",
-                aiEngineMode === "cloud"
-                  ? "bg-white text-teal-950 shadow-xs border border-teal-500/25 font-semibold"
-                  : "text-slate-500 hover:text-slate-800 hover:bg-white/40 border border-transparent"
-              )}
-              title="Modo IA Nube: Análisis semántico con Gemini 3.8 y respaldo Groq"
-            >
-              <span
-                className={cn(
-                  "w-1.5 h-1.5 rounded-full",
-                  aiEngineMode === "cloud" ? "bg-emerald-500 animate-pulse" : "bg-slate-300"
-                )}
-              />
-              <Cloud className="w-3.5 h-3.5 text-teal-600" />
-              <span>IA Nube</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => toggleAiEngineMode("offline_deterministic")}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer",
-                aiEngineMode === "offline_deterministic"
-                  ? "bg-white text-teal-950 shadow-xs border border-teal-500/25 font-semibold"
-                  : "text-slate-500 hover:text-slate-800 hover:bg-white/40 border border-transparent"
-              )}
-              title="Modo Local: Motor determinista a costo cero (0 Tokens)"
-            >
-              <span
-                className={cn(
-                  "w-1.5 h-1.5 rounded-full",
-                  aiEngineMode === "offline_deterministic" ? "bg-cyan-500" : "bg-slate-300"
-                )}
-              />
-              <Cpu className="w-3.5 h-3.5 text-cyan-600" />
-              <span>Local (0 Tokens)</span>
-            </button>
-          </div>
-
-          {/* Compact Pill Switch (Mobile) */}
+          {/* Compact Pill Switch (Mobile / Tablet) */}
           <button
             type="button"
             onClick={() =>
@@ -144,7 +144,7 @@ export function GlassHeader({
               )
             }
             className={cn(
-              "flex md:hidden items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer mr-0.5",
+              "flex lg:hidden items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer mr-0.5",
               aiEngineMode === "cloud"
                 ? "bg-emerald-50 text-emerald-800 border-emerald-500/30"
                 : "bg-cyan-50 text-cyan-800 border-cyan-500/30"
@@ -157,7 +157,7 @@ export function GlassHeader({
                 aiEngineMode === "cloud" ? "bg-emerald-500 animate-pulse" : "bg-cyan-500"
               )}
             />
-            <span>{aiEngineMode === "cloud" ? "Nube" : "Local"}</span>
+            <span>{aiEngineMode === "cloud" ? "Nube" : "0 Tokens"}</span>
           </button>
 
           <GlassButton
