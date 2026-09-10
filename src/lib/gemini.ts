@@ -575,34 +575,46 @@ export async function parseCvWithGemini(
       const prompt = `Analiza detalladamente este currículum vitae y extrae de forma estructurada los datos REALES y precisos del candidato.
 
 REGLAS DE EVALUACIÓN ESTRICTAS:
-1. SENIORITY SEGÚN EXPERIENCIA EN CÓDIGO:
-   - Calcula el tiempo neto dedicado exclusivamente al desarrollo de software según las fechas de los puestos de programación.
-   - Menos de 2 años en programación -> "Junior" (Pretensión salarial anual sugerida: 20000 a 28000 USD).
-   - De 2 a 4 años -> "Mid" (Pretensión salarial anual sugerida: 32000 a 50000 USD).
-   - Más de 5 años dedicados a ingeniería de software -> "Senior" (Pretensión: 65000+ USD).
-   - No asignes "Senior" si la experiencia en desarrollo es reciente (ej. proyectos de 2026 o menos de 2 años en código).
-2. TÍTULO PROFESIONAL Y ROL REAL:
-   - Extrae el cargo o especialidad principal demostrada (ej. "Senior Backend Developer", "Fullstack Engineer", "Frontend Developer & UI/UX Designer", "DevOps & Cloud Engineer", etc.).
-3. HABILIDADES:
-   - Extrae rigurosamente las tecnologías, lenguajes, frameworks, bases de datos y herramientas reales del candidato (ej. Node.js, Python, Java, React, SQL, Docker, etc.).
-4. DETECCIÓN DE NEGACIONES Y LÍMITES TÉCNICOS:
-   - Si el candidato declara que NO domina, NO realiza, carece de experiencia o desea evitar ciertas áreas o herramientas (ej. "no domina procesos de UI/UX Designer", "sin experiencia en diseño visual ni Figma", "no programa en PHP", etc.):
+1. CÁLCULO DE SENIORITY ESTRICTO Y EXPERIENCIA NETA:
+   - Contabiliza ÚNICAMENTE la experiencia neta comprobable en desarrollo de software, programación, ingeniería de software o diseño de producto digital (UI/UX).
+   - IGNORA COMPLETAMENTE roles ajenos a tecnología: descarta cualquier experiencia en ventas en piso, atención al cliente física, cajero, operaciones no técnicas o logística física para el cómputo de seniority o años de carrera técnica.
+   - Menos de 2 años netos en desarrollo o diseño digital -> "Junior" (Pretensión salarial anual sugerida: 20000 a 30000 USD).
+   - De 2 a 4 años netos -> "Mid" (Pretensión salarial anual sugerida: 32000 a 50000 USD).
+   - 5 o más años netos en ingeniería o diseño tecnológico -> "Senior" (Pretensión: 60000 a 85000+ USD).
+   - No asignes "Senior" si la experiencia en desarrollo es reciente (ej. inicios en 2024-2026 o proyectos iniciales).
+
+2. TÍTULO PROFESIONAL Y ROL REAL DEMOSTRADO:
+   - Extrae el cargo o especialidad principal demostrada por sus responsabilidades y proyectos (ej. "Frontend Developer & UI/UX Designer", "Fullstack Engineer", "Senior Backend Developer", "Product Designer").
+
+3. HABILIDADES AFIRMATIVAS (extractedSkills):
+   - Extrae rigurosamente las tecnologías, lenguajes, frameworks, bases de datos y herramientas reales que el candidato domina y utiliza efectivamente (ej. JavaScript, TypeScript, React, Tailwind CSS, Python, SQL, Figma, Git, etc.).
+
+4. SEPARACIÓN RIGUROSA DE EXCLUSIONES Y NEGACIONES (excludedSkills):
+   - Si el candidato declara que NO domina, NO realiza, carece de experiencia o desea evitar ciertas áreas o herramientas (ej. frases como "no manejo", "sin experiencia en", "descartar", "no programo en", "evitar soporte IT", "no domino PHP"):
      * NUNCA incluyas esas tecnologías en "extractedSkills".
-     * Agrégalas explícitamente a "excludedSkills".
+     * Agrégalas OBLIGATORIAMENTE al array "excludedSkills".
+     * Ejemplo: Si el documento dice "Sin experiencia en C# o Java", agrega "C#" y "Java" directamente a "excludedSkills".
+
+5. IDIOMAS:
+   - Identifica idioma nativo y nivel de inglés (A1, A2, B1, B2, C1, C2, Native).
+
+6. RESUMEN TEXTUAL ORDENADO (rawCvSummary):
+   - Genera una reconstrucción textual limpia, organizada y cronológica del contenido del currículum para registro histórico sin mezclar columnas.
 
 Devuelve EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura:
 {
   "fullName": string (Nombre y apellidos exactos del candidato encontrados en el documento),
-  "currentTitle": string (Puesto profesional representativo, ej. "Senior Backend Developer"),
+  "currentTitle": string (Puesto profesional representativo),
   "seniority": "Junior" | "Mid" | "Senior" | "Lead" | "Principal",
   "extractedSkills": string[] (Array de tecnologías y habilidades reales que el candidato domina),
-  "excludedSkills": string[] (Array de tecnologías o procesos que el candidato NO domina, excluye o no realiza),
-  "targetRoles": string[] (Array de 3 a 4 puestos afines),
+  "excludedSkills": string[] (Array de tecnologías o procesos que el candidato NO domina, excluye o rechaza),
+  "targetRoles": string[] (Array de 3 a 4 puestos afines en orden de relevancia),
   "minSalary": number (Pretensión salarial anual sugerida en USD acorde al seniority real),
   "languages": [
     { "language": "Español", "level": "Native" },
     { "language": "Inglés", "level": "B1" | "B2" | "C1" | "C2" | "Native", "preference": "async_preferred" | "live_fluent" }
-  ]
+  ],
+  "rawCvSummary": string (Reconstrucción textual completa, limpia y ordenada del currículum)
 }`;
 
       const parts: any[] = [{ text: prompt }];
@@ -639,6 +651,11 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura:
             ? "groq_llama_70b"
             : "gemini_3_8_flash";
 
+        const cleanRawText =
+          parsed.rawCvSummary && typeof parsed.rawCvSummary === "string" && parsed.rawCvSummary.length > 20
+            ? parsed.rawCvSummary
+            : rawCvText;
+
         return {
           fullName: parsed.fullName || cleanNameFromFileName(fileName) || "Candidato",
           currentTitle: parsed.currentTitle || "Software Engineer",
@@ -657,7 +674,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura:
                 { language: "Español", level: "Native" },
                 { language: "Inglés", level: "B2", preference: "async_preferred" },
               ],
-          rawCvText,
+          rawCvText: cleanRawText,
           engineUsed,
           engineLabel,
         };

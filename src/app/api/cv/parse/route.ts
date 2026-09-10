@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseCvWithGemini } from "@/lib/gemini";
+import { parseCvWithGemini, getAiEngineMode } from "@/lib/gemini";
 import { getProfileFromDb, saveProfileToDb } from "@/lib/db";
 import { UserProfile } from "@/types";
 import { execFile } from "node:child_process";
@@ -58,27 +58,43 @@ export async function POST(req: NextRequest) {
     };
 
     let textContent = cvText;
-    if (fileBase64 && (!textContent || textContent.length < 30)) {
-      const extracted = await extractTextFromPdfBase64(fileBase64);
-      if (extracted && extracted.trim().length > 0) {
-        textContent = extracted;
+    let extractedData: Partial<UserProfile> | null = null;
+    const engineMode = getAiEngineMode();
+
+    // 1. VÍA PRIMARIA: Si hay PDF en Base64 y estamos en Modo Nube, enviamos el binario directamente
+    // a Gemini Flash con inlineData para utilizar su OCR visual nativo sin desordenar columnas ni ejecutar Python.
+    if (fileBase64 && engineMode === "cloud") {
+      extractedData = await parseCvWithGemini({
+        rawCvText: textContent,
+        fileBase64,
+        mimeType,
+        fileName,
+      });
+    }
+
+    // 2. VÍA DE EMERGENCIA (OFFLINE / FALLBACK): Si no hay Nube o Gemini retornó motor local autónomo,
+    // extraemos texto con Python extract_cv_pdf.py como salvaguarda de último recurso.
+    if (!extractedData || extractedData.engineUsed === "local_autonomous") {
+      if (fileBase64 && (!textContent || textContent.length < 30)) {
+        console.log("[CV Parse] Ejecutando extractor local Python como salvaguarda de emergencia...");
+        const extracted = await extractTextFromPdfBase64(fileBase64);
+        if (extracted && extracted.trim().length > 0) {
+          textContent = extracted;
+        }
       }
-    }
 
-    if (!textContent && !fileBase64) {
-      return NextResponse.json(
-        { error: "No se proporcionó texto ni archivo de currículum." },
-        { status: 400 }
-      );
-    }
+      if (!textContent && !fileBase64) {
+        return NextResponse.json(
+          { error: "No se proporcionó texto ni archivo de currículum legible." },
+          { status: 400 }
+        );
+      }
 
-    // Call Gemini with multimodal support
-    const extractedData = await parseCvWithGemini({
-      rawCvText: textContent,
-      fileBase64,
-      mimeType,
-      fileName,
-    });
+      extractedData = await parseCvWithGemini({
+        rawCvText: textContent,
+        fileName,
+      });
+    }
 
     // Clean profile update from newly parsed CV
     const existingProfile = getProfileFromDb();
@@ -90,7 +106,7 @@ export async function POST(req: NextRequest) {
         existingProfile?.currentTitle ||
         "Software Engineer",
       seniority: (extractedData.seniority as any) || existingProfile?.seniority || "Mid",
-      rawCvText: textContent || existingProfile?.rawCvText || "",
+      rawCvText: extractedData.rawCvText || textContent || existingProfile?.rawCvText || "",
       cvFileName: fileName || existingProfile?.cvFileName,
       extractedSkills:
         Array.isArray(extractedData.extractedSkills) && extractedData.extractedSkills.length > 0
@@ -127,7 +143,7 @@ export async function POST(req: NextRequest) {
       success: true,
       profile: updatedProfile,
       fileName,
-      extractedChars: textContent.length,
+      extractedChars: (updatedProfile.rawCvText || textContent || "").length,
       engineUsed: updatedProfile.engineUsed,
       engineLabel: updatedProfile.engineLabel,
     });
