@@ -91,7 +91,7 @@ export interface InterviewQuestion {
   modelAnswer: string;
 }
 
-export type ActiveTab = "radar" | "pipeline" | "profile";
+export type ActiveTab = "radar" | "pipeline" | "profile" | "analytics";
 
 export interface EvaluationResult {
   isMatch: boolean;

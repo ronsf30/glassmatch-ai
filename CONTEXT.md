@@ -1,6 +1,6 @@
 # CONTEXT.md — Documento Maestro de Contexto y Auditoria Tecnica
 ## Proyecto: GlassMatch AI (Caribbean Sea Glass Edition)
-**Version:** 0.4.0 (Fase 6 Centinela Autonomo & Alertas por Webhook)  
+**Version:** 0.5.0 (Fase 7 Soberania de Datos, Respaldo y Analitica Historica)  
 **Fecha de corte:** 10 de Septiembre de 2026  
 **Repositorio Oficial:** https://github.com/ronsf30/glassmatch-ai (Rama: main)  
 **Proposito del documento:** Proporcionar una radiografia tecnica exhaustiva, rigurosa y sin ambiguedades de toda la arquitectura, modelos de datos, endpoints, logica algoritmica y estado de desarrollo de la aplicacion para revision, auditoria de seguridad, analisis de codigo y evaluacion por personal de ingenieria y agentes de IA externos.
@@ -71,12 +71,16 @@ glassmatch-ai/
     ├── app/
     │   ├── globals.css            # Clases de utilidad y diseno Caribbean Sea Glass
     │   ├── layout.tsx             # Shell HTML raiz con fuentes tipograficas
-    │   ├── page.tsx               # Controlador principal de vistas (Tabs: Radar, Pipeline, Studio)
+    │   ├── page.tsx               # Controlador principal de vistas (Tabs: Radar, Pipeline, Studio, Analytics)
     │   └── api/
+    │       ├── backup/route.ts           # GET descargar snapshot SQLite dev.db, POST restaurar con verificacion
     │       ├── config/
     │       │   ├── gemini/route.ts       # GET/POST diagnostico y conmutacion de estrategia Gemini
     │       │   └── backup-ai/route.ts    # GET/POST diagnostico y clave de Groq Cloud
     │       ├── cv/parse/route.ts         # POST parseo multimodal de CV (Gemini Base64 / Python)
+    │       ├── export/
+    │       │   ├── csv/route.ts          # GET exportacion tabular en CSV con BOM UTF-8 para Excel
+    │       │   └── json/route.ts         # GET exportacion integral estructurada en JSON
     │       ├── interview/route.ts        # POST simulador de preguntas de entrevista tecnica
     │       ├── jobs/
     │       │   ├── route.ts              # GET listar vacantes aprobadas, POST crear, DELETE purgar
@@ -91,11 +95,13 @@ glassmatch-ai/
     ├── components/
     │   ├── layout/
     │   │   ├── AmbientGlow.tsx           # Efectos ambientales difusos
-    │   │   └── GlassHeader.tsx           # Barra de navegacion flotante con conmutador de motor
+    │   │   └── GlassHeader.tsx           # Barra de navegacion flotante con 4 pestanas y selector de motor
     │   ├── modules/
     │   │   ├── MatchRadarPreview.tsx     # Estacion de busqueda, filtros avanzados y feed de vacantes
     │   │   ├── GlassPipelinePreview.tsx  # Kanban bidireccional de 5 estados con metricas de embudo
     │   │   ├── ProfileStudioPreview.tsx  # Estudio de CV, limites tecnicos, configuracion de IA y Centinela
+    │   │   ├── AnalyticsStudioPreview.tsx# Soberania de datos, inteligencia salarial, auditoria y backups
+    │   │   ├── ExecutiveReportModal.tsx  # Reporte ejecutivo imprimible y exportable a PDF (@media print)
     │   │   ├── JobInspectorDrawer.tsx    # Drawer lateral para inspeccion, simulacro de entrevista y pitch
     │   │   ├── SyncJobsModal.tsx         # Modal para scraping masivo multi-portal
     │   │   ├── QuickAddModal.tsx         # Modal para analisis manual rapido de vacantes
@@ -264,29 +270,33 @@ El Centinela opera bajo dos modalidades complementarias:
 ### 7.4. Panel del Centinela en Profile Studio (`ProfileStudioPreview.tsx`)
 * Tarjeta dedicada para configurar estado (Activo/Inactivo), intervalo (3h, 6h, 12h, 24h), umbral de alerta (75% a 90%), URL de Webhook, prueba de conexion, ejecucion inmediata y monitor de estado.
 
+### 7.5. Modulo de Soberania y Analitica Historica (`AnalyticsStudioPreview.tsx` y Modales)
+* **Inteligencia Salarial de Mercado:** Calculo reactivo de mediana salarial, promedio, porcentaje de ofertas por encima del piso configurado por el candidato (`UserProfile.minSalary`) y distribucion por bandas (<$60k, $60k-$90k, $90k-$120k, $120k-$150k, >$150k).
+* **Metricas de Embudo y Conversion Historica:** Tasa de respuesta (% de aplicadas que avanzan a entrevistas u ofertas) y tasa de cierre de oferta (% de entrevistas convertidas en ofertas finales).
+* **Auditoria de Descarte y Barreras ATS:** Desglose categorizado de descartes por Kill Switch (Geografia/Visa, Disciplina, Exclusiones tecnicas, Idioma, Seniority).
+* **Gestion de Lista Negra de Empresas:** Listado en tiempo real de empresas con vacantes en estado descartado (`rejected`) con accion de 1 clic para desbloquear y permitir nuevas postulaciones.
+* **Exportador Universal de Datos:**
+  * Endpoint `/api/export/csv`: Genera archivo tabular con Byte Order Mark UTF-8 (`\uFEFF`) para renderizado impecable en Microsoft Excel sobre Windows.
+  * Endpoint `/api/export/json`: Descarga estructura consolidada con perfil, vacantes, evaluaciones cualitativas, configuracion y metricas.
+* **Reporte Ejecutivo Imprimible (`ExecutiveReportModal.tsx`):** Modal de alta fidelidad con resumen KPI, desglose tabular de postulaciones activas y estilos dedicados `@media print` para generacion instantanea de PDF mediante el dialogo de impresion del navegador.
+* **Respaldo y Restauracion de Base de Datos (`/api/backup`):**
+  * Descarga directa en caliente del snapshot binario `prisma/dev.db`.
+  * Restauracion mediante carga de archivo `.db` con validacion de cabecera binaria (*magic bytes* `SQLite format 3\0`), copia de seguridad preventiva (`dev.db.bak`) y verificacion de integridad relacional (`PRAGMA integrity_check`).
+
 ---
 
 ## 8. Estado del Proyecto y Fases Faltantes (Roadmap de Evolucion)
 
-### 8.1. Fases Completadas (1 a 6)
+### 8.1. Fases Completadas (1 a 7)
 * **Fase 1: Arquitectura Base y Diseno Glass UI:** Next.js 16 Turbopack, Tailwind v4, Framer Motion, diseno Caribbean Sea Glass.
 * **Fase 2: Ingestion de CV y Perfil del Candidato:** Multimodal OCR con Gemini Base64, fallback en Python UTF-8, heuristica de seniority, deteccion de limites tecnicos con negaciones (`no domino` -> `excludedSkills`) y persistencia relacional SQLite.
 * **Fase 3: Motor ATS Zero-Trust y Estacion Unificada:** Deduplicacion canonica por huella, barra unificada de busqueda y extraccion en vivo, panel de 5 columnas de filtros avanzados y evaluacion salarial progresiva respetando `$0`.
 * **Fase 4: Redundancia Multi-Cloud y Blindaje Legal:** Cascada en 4 niveles (Gemini Flash/Lite -> Google alternativo -> Groq Cloud Llama 3.3 70B -> Motor Local 0 tokens), interruptor de motor en cabecera y blindaje dinamico de autorizaciones de seguridad nacional y permisos W-2.
 * **Fase 5: Mini-CRM Glass Pipeline y Preparacion:** Tablero Kanban bidireccional de 5 estados, metricas de embudo y conversion en tiempo real, preparacion contextual en tarjetas y notas estructuradas con etiquetas rapidas.
 * **Fase 6: Automatizacion Desatendida y Alertas por Webhook:** Demonio autonomo en segundo plano (`scripts/worker.mjs`, `Iniciar-Centinela.bat`), temporizador in-app, despachador universal de Webhooks (Discord, Telegram, Slack) con prueba de conexion y panel de administracion en Estudio de Perfil.
+* **Fase 7: Soberania de Datos, Respaldo y Analitica Historica:** Exportador universal a CSV (con UTF-8 BOM para Excel) y JSON integral, reporte ejecutivo imprimible/PDF (@media print), respaldo binario y restauracion SQLite con validacion de cabecera y comprobacion de integridad, e inteligencia salarial de mercado vs piso personal, embudo de conversion y auditoria de descartes Kill Switch.
 
 ### 8.2. Fases Faltantes Planificadas (Post-Core)
-
-#### Fase 7: Soberania de Datos, Respaldo y Analitica Historica (Analytics & Portability)
-* **Objetivo:** Ofrecer control y portabilidad total de los datos del candidato y analisis estadistico de su proceso de busqueda.
-* **Alcance Tecnico:**
-  1. Exportador universal de datos a formatos abiertos: CSV, JSON y reporte consolidado de postulaciones en PDF.
-  2. Backup y Restauracion en 1 clic de la base de datos SQLite (`prisma/dev.db`), facilitando migracion entre maquinas.
-  3. Panel de Analitica Historica:
-     * Tiempo promedio de respuesta por empresa o tipo de tecnologia.
-     * Grafico de dispersion de salarios ofrecidos vs habilidades demandadas.
-     * Registro de motivos de descarte y empresas bloqueadas.
 
 #### Fase 8: Sastreria de CV por Oferta (Resume Tailoring para ATS Externos)
 * **Objetivo:** Asistir al candidato en la adaptacion etica de su CV para superar los filtros ATS propios de cada empresa.

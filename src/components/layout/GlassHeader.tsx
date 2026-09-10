@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Sparkles, Radar, Kanban, UserCheck, Plus, Zap, HelpCircle, Cloud, Cpu } from "lucide-react";
+import { Sparkles, Radar, Kanban, UserCheck, Plus, Zap, HelpCircle, Cloud, Cpu, BarChart3 } from "lucide-react";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { ActiveTab } from "@/types";
 import { cn } from "@/lib/utils";
@@ -39,6 +39,11 @@ export function GlassHeader({
       id: "profile",
       label: "CV & Perfil Studio",
       icon: <UserCheck className="w-4 h-4" />,
+    },
+    {
+      id: "analytics",
+      label: "Analítica & Datos",
+      icon: <BarChart3 className="w-4 h-4" />,
     },
   ];
 

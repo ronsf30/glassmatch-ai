@@ -6,6 +6,7 @@ import { GlassHeader } from "@/components/layout/GlassHeader";
 import { MatchRadarPreview } from "@/components/modules/MatchRadarPreview";
 import { GlassPipelinePreview } from "@/components/modules/GlassPipelinePreview";
 import { ProfileStudioPreview } from "@/components/modules/ProfileStudioPreview";
+import { AnalyticsStudioPreview } from "@/components/modules/AnalyticsStudioPreview";
 import { JobInspectorDrawer } from "@/components/modules/JobInspectorDrawer";
 import { QuickAddModal } from "@/components/modules/QuickAddModal";
 import { SyncJobsModal } from "@/components/modules/SyncJobsModal";
@@ -93,6 +94,18 @@ function GlassMatchApp() {
               transition={{ duration: 0.18 }}
             >
               <ProfileStudioPreview />
+            </motion.div>
+          )}
+
+          {activeTab === "analytics" && (
+            <motion.div
+              key="analytics"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+            >
+              <AnalyticsStudioPreview />
             </motion.div>
           )}
         </AnimatePresence>
