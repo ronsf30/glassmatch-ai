@@ -1,0 +1,65 @@
+// GlassMatch AI — Prisma SQLite Schema
+// Blueprint Maestro: PROJECT_PLAN_EXTENDED.md
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model UserProfile {
+  id              String   @id @default(uuid())
+  fullName        String
+  currentTitle    String
+  seniority       String   // "Junior", "Mid", "Senior", "Lead"
+  rawCvText       String   // Texto extraído del PDF
+  extractedSkills String   // JSON array: ["React", "Python", "Docker"]
+  targetRoles     String   // JSON array: ["Fullstack Engineer", "Frontend Lead"]
+  workModes       String   // JSON array: ["remote", "hybrid"]
+  minSalary       Float?
+  preferredLocs   String   // JSON array: ["Remote", "España", "LATAM", "USA"]
+  updatedAt       DateTime @updatedAt
+}
+
+model JobOffer {
+  id              String         @id @default(uuid())
+  title           String
+  company         String
+  location        String
+  workMode        String         // "remote", "hybrid", "onsite"
+  url             String         // Enlace original a la vacante
+  salaryText      String?
+  description     String
+  source          String         // "LinkedIn", "Indeed", "Glassdoor", "Manual"
+  publishedAt     DateTime?
+  createdAt       DateTime       @default(now())
+  
+  match           JobMatch?
+  tracking        ApplicationTracker?
+}
+
+model JobMatch {
+  id              String   @id @default(uuid())
+  jobOfferId      String   @unique
+  jobOffer        JobOffer @relation(fields: [jobOfferId], references: [id], onDelete: Cascade)
+  matchScore      Int      // 0 a 100
+  executiveSummary String
+  strengths       String   // JSON array de puntos fuertes
+  missingSkills   String   // JSON array de brechas detectadas
+  interviewAdvice String   // Qué preparar para la entrevista
+  generatedPitch  String?  // Mensaje de contacto sugerido
+  analyzedAt      DateTime @default(now())
+}
+
+model ApplicationTracker {
+  id              String   @id @default(uuid())
+  jobOfferId      String   @unique
+  jobOffer        JobOffer @relation(fields: [jobOfferId], references: [id], onDelete: Cascade)
+  status          String   // "discovered" | "saved" | "applied" | "interviewing" | "offered" | "rejected"
+  appliedDate     DateTime?
+  personalNotes   String?
+  updatedAt       DateTime @updatedAt
+}
