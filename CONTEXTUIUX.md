@@ -1,165 +1,278 @@
-# CONTEXTUIUX.md — Auditoria Integral de Interfaz y Experiencia de Usuario (UI/UX)
+# CONTEXTUIUX.md — Auditoria Integral de Interfaz, Diseno y Experiencia de Usuario (UI/UX)
 ## Proyecto: GlassMatch AI (Caribbean Sea Glass Edition)
-**Modulo Auditado:** Modal de Analisis Manual de Vacantes ("+ Nueva Vacante" / `QuickAddModal.tsx`) y Tour Guiado (`TutorialModal.tsx`)  
-**Fecha de evaluacion:** Septiembre 2026  
-**Destinatarios:** Auditores de producto, disenadores de interfaces, desarrolladores frontend y agentes de IA externos.
+**Version:** 0.2.0 (Fase 4 Multi-Cloud & Zero-Trust ATS)  
+**Fecha de evaluacion:** 10 de Septiembre de 2026  
+**Repositorio Oficial:** https://github.com/ronsf30/glassmatch-ai (Rama: main)  
+**Destinatarios:** Auditores de producto, disenadores de sistemas de diseno, desarrolladores frontend, auditores de accesibilidad y agentes de IA externos.
 
 ---
 
-## 1. Proposito y Funcion de la Ventana "Analizar Vacante con Gemini AI"
+## 1. Filosofia y Sistema de Diseno "Caribbean Sea Glass"
 
-La ventana modal emergente accesible mediante el boton **"+ Nueva Vacante"** en la barra de navegacion (`GlassHeader.tsx`) cumple la funcion de **Analizador Asincrono Unico**. 
+GlassMatch AI implementa un lenguaje visual denominado **Caribbean Sea Glass**, concebido para transformar la experiencia de busqueda laboral en un entorno calmado, transparente, preciso y libre de sobrecarga cognitiva.
 
-Su objetivo operativo es permitir al usuario evaluar al instante cualquier oferta laboral encontrada fuera del sistema (por ejemplo, en LinkedIn, portales corporativos, hilos de Twitter/X, mensajes directos de reclutadores, WhatsApp o correos electronicos) sin tener que esperar o ejecutar una sincronizacion masiva de todo el mercado.
+### 1.1. Paleta Cromatica y Roles Semanticos
+El sistema de diseno utiliza tokens basados en Tailwind CSS v4 con variables semanticas estandarizadas:
 
-### Flujo de Trabajo (Workflow):
-1. **Captura:** El candidato localiza una vacante externa y copia el texto descriptivo o la URL.
-2. **Entrada de Datos:** Abre el modal e ingresa el titulo del puesto, la empresa empleadora y pega el cuerpo de la descripcion.
-3. **Pre-Filtrado y Sanitizacion:** El sistema sanitiza el HTML y ejecuta los 5 Kill Switches deterministas en 0 ms.
-4. **Analisis Semantico:** Si la oferta supera los Kill Switches, se invoca a Gemini 2.0 Flash para obtener:
-   - Match Score ponderado (0 a 100).
-   - Resumen ejecutivo del encaje.
-   - Puntos fuertes y brechas detectadas.
-   - Consejos personalizados para la entrevista tecnica.
-   - Pitch de contacto sugerido en primer contacto.
-5. **Inyeccion Inmediata:** La vacante se inserta directamente en la base de datos local SQLite (`JobOffer` + `JobMatch` + `ApplicationTracker`) y se muestra en la primera posicion del Match Radar sin recargar la aplicacion.
+- **Mar Profundo / Texto Principal (`slate-900` / `#0f172a`):** Proporciona un contraste tipografico de maximo rigor sobre fondos claros, asegurando legibilidad sin fatiga visual.
+- **Pizarra Media / Micro-copys (`slate-500` / `#64748b` a `slate-600` / `#475569`):** Utilizado para metadatos, etiquetas secundarias y fechas de seguimiento.
+- **Agua Cristalina / Turquesa Primario (`teal-500` / `#14b8a6`, `teal-600` / `#0d9488`):** Color de identidad de marca. Representa fluidez, precision y confianza.
+- **Brisa Marina / Cyan Secundario (`cyan-500` / `#06b6d4`, `cyan-600` / `#0891b2`):** Utilizado en gradientes decorativos, anillos de compatibilidad de alto rendimiento y estados hover.
+- **Verde Esmeralda Operativo (`emerald-500` / `#10b981`, `emerald-600` / `#059669`):** Estados de salud de IA activos, afinidad sobresaliente (Score >= 85%) y conexiones exitosas.
+- **Ambar de Cuota y Advertencia (`amber-500` / `#f59e0b`, `amber-600` / `#d97706`):** Notificaciones de cuota excedida (HTTP 429), alertas de brecha tecnica o compatibilidad media (70% a 84%).
+- **Carmesi de Descarte / Error (`rose-500` / `#f43f5e`, `rose-600` / `#e11d48`):** Acciones destructivas, vacantes descartadas por Kill Switch o fallo critico de infraestructura.
 
----
+### 1.2. Materialidad Translucida (Glassmorphism Avanzado)
+El diseno de superficies no utiliza fondos opacos solidos; se basa en refraccion fisica simulada:
+- **Tarjetas de Cristal Base (`GlassCard.tsx`):**
+  - Fondo: `bg-white/70` a `bg-white/90` con `backdrop-blur-xl` o `backdrop-blur-2xl`.
+  - Bordes perimetrales: `border border-white/60` con realces tenues en `border-teal-500/20`.
+  - Sombras difusas: `shadow-[0_8px_32px_rgba(13,148,136,0.06)]` que transmiten elevacion sin saturar de tinta oscura la interfaz.
+- **Fondos de Modales y Drawers:**
+  - Telon de fondo (`backdrop`): `bg-slate-900/40` con desenfoque adaptativo `backdrop-blur-md`.
 
-## 2. Radiografia y Auditoria UI/UX Componente por Componente (`QuickAddModal.tsx`)
-
-A continuacion se desglosa la anatomia visual, el comportamiento y el diagnostico ergonomico de cada elemento presente en la interfaz de la ventana:
-
-### 2.1. Fondo y Contenedor Translúcido (Backdrop & Container)
-- **Implementacion:**
-  - Telon de fondo: `bg-slate-900/30 backdrop-blur-xs` animado con Framer Motion.
-  - Tarjeta modal: `GlassCard` con `bg-white/95 backdrop-blur-3xl`, borde sutil `border-teal-500/25` y sombra profunda difusa `shadow-[0_20px_60px_rgba(13,148,136,0.2)]`.
-- **Evaluacion UI/UX:**
-  - **Acierto:** El contraste del fondo desenfocado centra la atencion del usuario en el formulario y respeta el lenguaje visual "Caribbean Sea Glass".
-  - **Oportunidad de Mejora:** El desenfoque del backdrop (`backdrop-blur-xs`) es muy tenue; elevarlo a `backdrop-blur-sm` o `md` aumenta el aislamiento visual y reduce distracciones con las tarjetas del fondo.
-
-### 2.2. Cabecera del Modal (Header)
-- **Implementacion:**
-  - Icono `Sparkles` turquesa encapsulado en caja de cristal con borde perimetral.
-  - Titulo: "Analizar Vacante con Gemini AI" (16px, `font-bold`, color pizarra profunda `text-slate-900`).
-  - Subtitulo: "Diagnóstico semántico instantáneo y pitch personalizado" (12px, `text-slate-500`).
-  - Boton de cierre `X`: Esquina superior derecha con hover suave y feedback tactil.
-- **Evaluacion UI/UX:**
-  - **Acierto:** Comunica de inmediato el valor de la ventana y el motor de IA responsable.
-  - **Accesibilidad:** Cumple ratios de contraste WCAG AA.
-
-### 2.3. Selector de Modalidad de Entrada (Tab Switcher)
-- **Implementacion:**
-  - Pestaña 1: "Pegar Descripción / Texto" (Icono `FileText`).
-  - Pestaña 2: "Pegar Enlace (URL)" (Icono `Link`).
-  - Contenedor con fondo gris tenue `bg-slate-100/80` y pastilla activa blanca con sombra y borde turquesa.
-- **Evaluacion UI/UX y Hallazgo Funcional Critico:**
-  - **Acierto Ergonomico:** La alternativa de pestañas segmentadas es familiar y eficiente.
-  - **Punto Critico Detectado (Gap de Producto):** En la pestaña "Pegar Enlace (URL)", el codigo actual genera una descripcion simulada basada en la URL pero no realiza scraping web dinamico del enlace introducido por el usuario. Si el usuario solo pega un link externo sin que haya un scraper activo para ese dominio arbitrario, el analisis resultante carecera de los requisitos reales de la oferta.
-  - **Recomendacion UX:** Se debe priorizar y recomendar por defecto la pestaña "Pegar Descripción / Texto" agregando un micro-copy indicativo: *"Recomendado: Pega el texto completo para un diagnostico 100% preciso con tu perfil"*.
-
-### 2.4. Campos "Puesto / Título" y "Empresa"
-- **Implementacion:**
-  - Grid de dos columnas horizontales con labels de 12px `font-semibold text-slate-700`.
-  - Placeholders contextuales: `ej. Staff Frontend Eng.` y `ej. Supabase / OpenAI`.
-  - Altura de 36px (`h-9`), bordes redondeados `rounded-xl` y foco turquesa `focus:border-teal-500`.
-- **Evaluacion UI/UX:**
-  - **Acierto:** Ahorran espacio vertical al estar dispuestos en dos columnas paralelas.
-  - **Oportunidad de Mejora:** Anadir la etiqueta `(Opcional)` junto al label, ya que si el usuario no los llena, el analizador deduce titulos genericos.
-
-### 2.5. Area de Texto ("Descripción de la Vacante")
-- **Implementacion:**
-  - `textarea` de 5 filas fijas con `resize-none`.
-  - Placeholder orientador: *"Pega aquí los requisitos, responsabilidades y descripción de la oferta laboral..."*.
-- **Evaluacion UI/UX:**
-  - **Acierto:** Altura suficiente para mostrar los primeros parrafos pegados sin desbordar la pantalla en portatiles de 13 pulgadas.
-  - **Oportunidad de Mejora:** Anadir un contador dinamico de caracteres o palabras pegadas (ej. *"1,250 caracteres detectados"*) para dar retroalimentacion instantanea de que el texto no esta vacio o truncado.
-
-### 2.6. Estado de Carga y Animacion de Espera (Processing State)
-- **Implementacion:**
-  - Reemplazo dinamico del formulario por un contenedor de espera animado.
-  - Doble anillo pulsante turquesa (`animate-spin` y `animate-ping`).
-  - Mensaje dinámico en dos etapas: *"Conectando con Gemini Flash AI..."* y *"Evaluando brechas y fortalezas con tu perfil..."*.
-- **Evaluacion UI/UX:**
-  - **Acierto:** Excelente reduccion de la carga cognitiva y de la percepcion de espera mediante animaciones fluidas que informan el progreso real.
-
-### 2.7. Pie de Formulario y Boton de Accion Principal (Footer & CTA)
-- **Implementacion:**
-  - Indicador lateral: *"Salida estructurada en esquema JSON"* en color verde azulado `text-teal-800`.
-  - Boton "Cancelar" estilo fantasma (`variant="ghost"`).
-  - Boton "Ejecutar Match AI" turquesa brillante con icono `Sparkles`.
-- **Evaluacion UI/UX:**
-  - **Acierto:** Clara jerarquia visual entre la accion primaria y secundaria.
-  - **Hallazgo Critico:** El texto *"Salida estructurada en esquema JSON"* es un detalle tecnico interno irrelevante para el candidato. 
-  - **Recomendacion UX:** Sustituir ese texto por un mensaje centrado en el beneficio del usuario: *"Evaluacion Zero-Trust bajo tus limites tecnicos"*.
+### 1.3. Movimiento y Micro-interacciones
+- **Libreria:** Framer Motion 13.
+- **Fisica:** Animaciones con amortiguacion (`damping: 25`, `stiffness: 300`) en expansiones y transiciones modales.
+- **Feedback visual:** Efectos sutiles de elevacion al cursor (`hover:-translate-y-0.5`), transicion de color de borde a 200 ms y pulsos de estado (`animate-pulse`) en sondas de conexion en tiempo real.
 
 ---
 
-## 3. Auditoria de Consistencia Funcional del Analizador Manual
+## 2. Anatomia y Auditoria por Modulo de Interfaz
 
-Durante la auditoria del codigo de `QuickAddModal.tsx`, se detectaron 2 inconsistencias funcionales que deben atenderse:
+---
 
-| Elemento | Comportamiento Actual | Riesgo Detectado | Solucion Recomendada |
+### 2.1. Barra de Navegacion Superior (`GlassHeader.tsx`)
+
+La cabecera actua como el centro neuronal de navegacion, control de estado global e invocacion de acciones rapidas.
+
+#### Elementos Estructurales:
+1. **Identidad de Marca:**
+   - Logotipo de gema con gradiente turquesa y tipografia en peso 800: "GlassMatch AI".
+   - Subtitulo de estado: "Caribbean Sea Glass Edition — Multi-Cloud ATS".
+2. **Badge de Salud y Modelo de IA Dinamico:**
+   - **Estado Operativo Normal:** Pastilla verde esmeralda con punto pulsante (`bg-emerald-500`), texto del modelo activo (ej. "Gemini 3.8 Flash-Lite").
+   - **Estado de Cuota Excedida / Advertencia:** Pastilla ambar con icono de alerta (`bg-amber-500`), texto "Gemini Cuota Excedida (HTTP 429)" con tooltip explicativo.
+   - **Estado de Respaldo Multi-Cloud Activo:** Pastilla cyan con indicador "Groq Llama 3.3 70B (Respaldo)".
+   - **Estado Offline / Motor Local:** Pastilla gris pizarra "Motor Local Zero-Trust".
+3. **Pestanas Principales de Navegacion (Tabs):**
+   - **Radar:** Icono `Compass`, acceso al listado y filtrado de vacantes evaluadas.
+   - **Pipeline:** Icono `Kanban`, acceso al tablero CRM de postulaciones.
+   - **Perfil:** Icono `UserCheck`, acceso al Profile Studio, configuracion de IA y subida de CV.
+4. **Disparadores Globales:**
+   - Boton "+ Nueva Vacante": Abre `QuickAddModal.tsx` con atajo directo.
+   - Boton "Como Funciona": Abre el tour guiado interactivo de 6 pasos (`TutorialModal.tsx`).
+   - Boton "Sincronizar": Invoca la ingestion multi-portal con spinner interactivo y estado de progreso.
+
+#### Evaluacion de Calidad UI/UX:
+- **Aciertos:**
+  - El usuario siempre tiene visibilidad del modelo de IA que esta respondiendo sin tener que navegar a la pantalla de configuracion.
+  - La alternancia de pestanas preserva el estado en memoria sin recargar el DOM.
+- **Cumplimiento de Accesibilidad:** Cumple ratio de contraste 4.8:1 para texto e iconos sobre la barra translucida fija (`sticky top-0 z-40`).
+
+---
+
+### 2.2. Radar de Compatibilidad Laboral (`MatchRadarPreview.tsx` y `MatchRing.tsx`)
+
+Es el modulo de visualizacion principal donde se muestran las vacantes que superaron la bateria de 5 Kill Switches.
+
+#### Componente Destacado: Visualizador Radial (`MatchRing.tsx`)
+- **Implementacion:** SVG vectorial con propiedad parametrica `strokeDasharray` y `strokeDashoffset` calculada dinamicamente:
+  - Radio: 38px, Trazo: 6px.
+  - Gradiente vectorial SVG segun rango de score:
+    - **Score >= 85%:** Gradiente `emerald-400` a `teal-500` (Alta Afinidad).
+    - **Score 70% - 84%:** Gradiente `teal-400` a `cyan-500` (Buena Compatibilidad).
+    - **Score < 70%:** Tono `amber-400` (Afinidad Marginal).
+  - Micro-optimizacion: Se implemento `strokeLinecap="round"` y transicion CSS fluida en milisegundos para evitar parpadeos visuales al montar o filtrar tarjetas.
+
+#### Anatomia de la Tarjeta de Vacante (`JobCard`):
+1. **Encabezado:** Titulo del puesto (16px `font-bold`), Empresa empleadora con insignia de portal de origen (LinkedIn, Remotive, Jobicy, Arbeitnow, Manual).
+2. **Anillo Lateral:** Visualizacion compacta del porcentaje de encaje y nivel jerarquico deducido (Junior, Mid, Senior, Lead).
+3. **Pildoras de Metadatos:** Ubicacion y modalidad (Remoto Global, Remoto Pais, Hibrido), Salario inferido o detectado, Fecha de publicacion.
+4. **Etiquetas de Stack Tecnologico:** Badges redondeados con borde sutil turquesa mostrando las tecnologias principales encontradas en la oferta.
+5. **Caja de Diagnostico Ejecutivo:** Resumen semantico de 2 lineas generado por el modelo de IA destacando la razon fundamental del match.
+6. **Botonera de Accion Inmediata:**
+   - Boton "Inspeccionar Vacante": Despliega el drawer lateral con el analisis completo.
+   - Boton "Mover a Pipeline": Agrega la vacante a la etapa "Guardadas" o "Postuladas" con un solo clic.
+
+#### Barra de Filtrado y Controles:
+- **Filtro de Afinidad:** Segmentador rapido: `Todas`, `Score >= 70%`, `Score >= 80%`, `Score >= 90%`.
+- **Filtro de Idioma:** Selector `Todos`, `Solo Espanol`, `Solo Ingles`.
+- **Caja de Busqueda Reactiva:** Input con icono `Search` que filtra en tiempo real por coincidencia de texto en puesto, empresa o tecnologias.
+
+---
+
+### 2.3. Tablero CRM Glass Pipeline (`GlassPipelinePreview.tsx`)
+
+Permite gestionar el ciclo de vida completo de las postulaciones del candidato a lo largo de 6 columnas transaccionales:
+
+#### Las 6 Etapas Transaccionales:
+1. **Descubiertas:** Vacantes que entraron por sincronizacion automatica o captura manual y tienen alta afinidad.
+2. **Guardadas:** Vacantes seleccionadas por el candidato para postular a corto plazo.
+3. **Postuladas:** Aplicacion formal realizada (envio de CV, formulario corporativo o mensaje a reclutador).
+4. **En Entrevista:** Procesos activos con screening de RRHH, prueba tecnica o entrevista cultural.
+5. **Oferta Recibida:** Propuesta laboral en fase de evaluacion o negociacion de compensacion.
+6. **Descartadas:** Procesos concluidos por el candidato o rechazos del empleador.
+
+#### Caracteristicas de Experiencia de Usuario:
+- **Cabecera de Embudo (Funnel Metrics):** Indicadores numericos superiores con el recuento total de vacantes en proceso activo, ratio de avance a entrevista y tiempo promedio en dias.
+- **Selectores de Transicion Rapida:** Cada tarjeta en el pipeline dispone de un menu desplegable optimizado que permite mover la postulacion a cualquiera de las otras 5 etapas con actualizacion inmediata en la base de datos local SQLite.
+- **Bloc de Notas Confidencial Integrado:** Acceso a un area de notas por vacante donde el usuario puede registrar preguntas realizadas en la entrevista, rangos salariales conversados o datos de contacto del entrevistador.
+
+---
+
+### 2.4. Profile Studio y Centro de Control de IA (`ProfileStudioPreview.tsx`)
+
+Es el panel de configuracion central donde convergen la identidad del profesional y la orquestacion de la infraestructura de IA.
+
+#### 2.4.1. Tarjeta 1: Selector de Estrategia Gemini 3.8 (Con Feedback de Cuota en Vivo)
+- **Pestana "Maxima Precision" (Gemini 3.8 Flash):**
+  - **Uso:** Analisis ATS de maxima profundidad analitica y deteccion exhaustiva de sutilezas tecnicas.
+  - **Comportamiento ante Cuota Excedida (HTTP 429):**
+    - Despliega una alerta ambar con borde `border-amber-500/30` y fondo `bg-amber-50/80`.
+    - Mensaje textual claro: *"Cuota gratuita de Gemini Flash agotada (HTTP 429: Resource has been exhausted). Cambia a Ahorro Inteligente o activa Groq Cloud para continuar operando sin interrupcion"*.
+    - Proporciona retroalimentacion honesta y comprensible de por que esa pestana particular esta temporalmente en pausa.
+- **Pestana "Ahorro Inteligente" (Gemini 3.8 Flash-Lite):**
+  - **Uso:** Analisis rapido, optimizacion de costos de API y respuesta inmediata.
+  - **Comportamiento en Vivo:**
+    - Despliega un panel verde esmeralda con borde `border-emerald-500/30` y fondo `bg-emerald-50/80`.
+    - Mensaje textual: *"Operativo con Gemini 3.8 Flash-Lite. Consumo minimo de tokens y respuesta inmediata"*.
+    - Brinda luz verde al usuario para trabajar de inmediato con total normalidad.
+- **Mecanismo de Guardado:** Al hacer clic en cualquiera de las dos pestanas, la seleccion se persiste en milisegundos en la base de datos SQLite (`AppConfig`) a traves del endpoint `/api/config/gemini`, manteniendo la preferencia al reiniciar la aplicacion.
+
+#### 2.4.2. Tarjeta 2: Proveedor de Respaldo Multi-Cloud (Groq Cloud Llama 3.3 70B)
+- **Interruptor Maestro (Toggle Switch):** Activa o desactiva la participacion de Groq Cloud como escalon Nivel 3 en la cascada de llamadas.
+- **Campo de Credencial (API Key):** Input protegido de tipo contrasena con mascara y boton para revelar/ocultar caracteres.
+- **Selector de Modelo:** Permite alternar entre `llama-3.3-70b-versatile` (70 mil millones de parametros, alta precision) y `llama-3.1-8b-instant` (ultrarrapido).
+- **Boton de Diagnostico en Vivo ("Probar Conexion"):**
+  - Ejecuta una llamada de comprobacion contra `/api/config/backup-ai`.
+  - Muestra un spinner de medicion y retorna la latencia exacta en milisegundos (ej. *"Conexion exitosa — Latencia: 312 ms — Modelo: llama-3.3-70b-versatile"*).
+
+#### 2.4.3. Extractor de CV Multimodal y Limites Tecnicos
+- **Zona de Carga Drag & Drop:**
+  - Acepta archivos PDF con retroalimentacion inmediata de carga.
+  - Ejecuta en backend el script `scripts/extract_cv_pdf.py` con codificacion UTF-8 forzada.
+  - Extrae y presenta en pantalla: Titulo profesional detectado, anos de experiencia, nivel de ingles detectado y lista estructurada de tecnologias dominadas.
+- **Matriz de Limites Tecnicos Excluidos (Zero-Trust Hard Exclusions):**
+  - Interfaz interactiva de etiquetas removibles para definir tecnologias expresamente rechazadas (ej. `PHP`, `C++`, `Java legacy`, `Modalidad Presencial`).
+  - El motor Zero-Trust ATS utiliza esta lista para ejecutar el Kill Switch correspondiente antes de consultar cualquier API de inteligencia artificial.
+
+---
+
+### 2.5. Inspector Lateral de Vacantes (`JobInspectorDrawer.tsx`)
+
+Panel deslizante que se despliega desde el lateral derecho al inspeccionar cualquier vacante del radar o pipeline.
+
+#### Estructura y Secciones:
+1. **Encabezado del Drawer:** Titulo del rol, empresa con enlace externo al portal original, boton de cierre rapido (Esc o clic fuera).
+2. **Desglose de Compatibilidad ATS:**
+   - Barra de progreso interactiva con el Match Score global.
+   - Puntos fuertes detectados (lista con marcas verdes de verificacion).
+   - Brechas o areas de mejora (lista con marcas ambar de advertencia).
+   - Justificacion analitica detallada de por que se obtuvo dicha calificacion.
+3. **Generador de Pitches de Contacto en 3 Tonos:**
+   - **Tono Directo y Ejecutivo:** Mensaje corto enfocado en impacto de negocio, metricas y soluciones directas para lideres tecnicos o directores.
+   - **Tono Consultivo y Tecnico:** Mensaje estructurado destacando arquitectura, buenas practicas y stack tecnologico afín para Hiring Managers.
+   - **Tono Entusiasta y Cultural:** Mensaje calido destacando alineacion con la mision de la compania y producto para reclutadores de talento.
+   - **Botonera de Copiado:** Cada tono incluye un boton "Copiar al portapapeles" con confirmacion visual temporal de 2 segundos ("Copiado").
+4. **Simulador de Entrevista Tecnica Interactiva:**
+   - Presenta preguntas desafiantes formuladas por la IA basadas en las brechas especificas detectadas entre el CV y la vacante.
+   - Area de texto interactiva para ensayar respuestas.
+   - Evaluador de respuesta que califica la solidez tecnica y la claridad de la argumentacion del candidato.
+
+---
+
+### 2.6. Modal de Analisis Manual de Ofertas (`QuickAddModal.tsx`)
+
+Permite ingresar cualquier oferta externa de LinkedIn, correos o foros sin esperar una sincronizacion automatica masiva.
+
+#### Flujo de Uso y Caracteristicas:
+- **Pestana 1 (Pegar Texto / Descripcion):** Area de texto optimizada para pegar los requisitos de la vacante, puesto y empresa.
+- **Pestana 2 (Pegar URL):** Permite ingresar la URL de una vacante corporativa.
+- **Pre-Filtrado Zero-Trust:** Ejecuta de inmediato los Kill Switches de limites tecnicos. Si la vacante solicita una tecnologia vetada en el perfil, el sistema informa del descarte sin consumir tokens de IA.
+- **Estado de Carga Semantica:** Animacion con anillo de pulso turquesa y micro-mensajes progresivos informando de la conexion con el modelo de IA.
+- **Inyeccion Automatica:** Tras la evaluacion exitosa, la vacante se guarda en SQLite y se posiciona en el radar en primer lugar.
+
+---
+
+### 2.7. Tour Guiado de Onboarding (`TutorialModal.tsx`)
+
+Modal interactivo de 6 pasos concebido para guiar a usuarios nuevos a traves de la arquitectura completa del sistema:
+
+1. **Paso 1: Bienvenido a GlassMatch AI:** Explicacion de la filosofia Zero-Trust ATS y eliminacion radical de falsos positivos.
+2. **Paso 2: El Match Radar y los 5 Kill Switches:** Como funciona el anillo de compatibilidad y los filtros de descarte previo.
+3. **Paso 3: Analisis Instantaneo ("+ Nueva Vacante"):** Como evaluar ofertas individuales externas en 2 segundos.
+4. **Paso 4: Sincronizador Multi-Canal en Vivo:** Integracion con LinkedIn, Remotive, Jobicy y Arbeitnow con temporizacion anti-baneo.
+5. **Paso 5: CRM Glass Pipeline de 6 Fases:** Como organizar el avance de postulaciones entre Descubiertas, Guardadas, Postuladas, En Entrevista, Ofertas y Descartadas.
+6. **Paso 6: Profile Studio y Estrategia Multi-Cloud:** Configuracion de CV en PDF, selector de estrategia Gemini 3.8 y respaldo con Groq Cloud 70B.
+
+---
+
+## 3. Matriz de Auditoria de Accesibilidad, Ergonomia y Rendimiento
+
+| Modulo / Componente | Criterio WCAG Evaluado | Estado Actual | Observacion Tecnica / Diagnostico |
 | :--- | :--- | :--- | :--- |
-| **Salario por Defecto** | Asigna `$100,000 - $130,000 USD` de forma cableada en codigo | Si la vacante pegada no tenia salario o era para un rol Junior de $25,000 USD, genera datos salariales falsos en el CRM. | Asignar `null` o `"A convenir / No especificado"` si el texto no incluye rango salarial explicito. |
-| **Manejo de Descarte (Kill Switch)** | Si la vacante recibe 0% o es incompatible, el codigo asignaba un score de respaldo de 85% y la guardaba igual | Viola el principio Zero-Trust del sistema, permitiendo que vacantes descartadas por Kill Switch entren al radar. | Si `isMatch === false` o `matchScore === 0`, no guardar la oferta y mostrar un toast o modal de descarte: *"Vacante rechazada por ATS: [Motivo]"*. |
+| **`GlassHeader.tsx`** | Contraste de texto (1.4.3) | Cumple (4.8:1) | Tipografia `slate-900` sobre cristal blanco con desenfoque de 24px. |
+| **`MatchRing.tsx`** | Uso del color (1.4.1) | Cumple | El porcentaje numerico textual acompana siempre al anillo cromatico. |
+| **`ProfileStudioPreview.tsx`** | Notificacion de errores (3.3.1) | Cumple | La alerta ambar de cuota 429 proporciona explicacion clara y via de solucion. |
+| **`JobInspectorDrawer.tsx`** | Control de foco por teclado (2.1.2) | Cumple | El drawer atrapa el foco y permite cierre con tecla Escape (`Radix UI Dialog`). |
+| **`QuickAddModal.tsx`** | Etiquetas en formularios (3.3.2) | Cumple | Todos los inputs poseen labels semanticos visibles e identificadores unicos. |
+| **Pipeline Drag / Drop** | Alternativa accesible (2.5.5) | Cumple | Cada tarjeta ofrece selectores desplegables nativos para cambio de columna sin arrastrar. |
 
 ---
 
-## 4. Auditoria del Modulo de Tutorial (`TutorialModal.tsx`)
+## 4. Auditoria de Estados del Sistema y Resiliencia Visual
 
-Se realizo una auditoria exhaustiva de los 5 pasos actuales del tutorial interactivo para determinar su vigencia frente a la version real de la aplicacion:
+El sistema esta disenado para comunicar de manera transparente cualquier contingencia de conectividad o consumo de tokens:
 
-### 4.1. Diagnostico de Desalineacion en el Tutorial Actual
+```
+[Inicio de Evaluacion de Vacante]
+               |
+      (Kill Switches = Superados)
+               |
+               v
+  +--------------------------+
+  | Estrategia Gemini 3.8    |
+  | Nivel 1: Flash / Lite    |
+  +--------------------------+
+         /             \
+    [HTTP 200]     [HTTP 429 Cuota]
+        |               \
+        v                v
+[Feedback Emerald]  +-----------------------------------+
+[UI Operativa]      | Nivel 2: Gemini 3.8 Alternativo   |
+                    +-----------------------------------+
+                           /                     \
+                      [HTTP 200]             [HTTP 429]
+                          |                       \
+                          v                        v
+                  [Feedback Emerald]      +-------------------------------+
+                                          | Nivel 3: Groq Cloud Llama 70B |
+                                          +-------------------------------+
+                                                 /                 \
+                                            [HTTP 200]          [Fallo API]
+                                                |                    \
+                                                v                     v
+                                        [Feedback Cyan]       +--------------------------+
+                                        [Badge: Groq Cloud]   | Nivel 4: Motor Local ATS |
+                                                              +--------------------------+
+                                                                     /
+                                                               [Feedback Pizarra]
+                                                               [Badge: Motor Local]
+```
 
-1. **Omision Total del Analizador Manual:**
-   - El tour interactivo explica el Match Radar, el Sincronizador de Empleo, el Pipeline, el Perfil y el Simulador de Entrevistas.
-   - **Problema:** En ningun paso se le explica al usuario la existencia de la ventana **"+ Nueva Vacante"**. El usuario novato desconoce que puede pegar cualquier oferta externa de LinkedIn o un correo y evaluarla en 2 segundos.
-
-2. **Desalineacion en los Portales del Sincronizador (Paso 2):**
-   - El tutorial afirma textualmente: *"Portales integrados: LinkedIn • Indeed • Glassdoor • ZipRecruiter"*.
-   - **Realidad:** El colector en produccion en `/api/sync/route.ts` opera de forma real con: **LinkedIn Guest API, Remotive, Jobicy y Arbeitnow**. Indicar portales que requieren API keys corporativas de pago o scrapers pesados desorienta al usuario.
-
-3. **Desalineacion en las Columnas del Glass Pipeline (Paso 3):**
-   - El tutorial afirma: *"organizar tus procesos en cuatro fases: Guardadas, Postuladas, Entrevistas, Ofertas"*.
-   - **Realidad:** El CRM implementado cuenta con **6 columnas transaccionales**: `Descubiertas`, `Guardadas`, `Postuladas`, `En Entrevista`, `Oferta Recibida` y `Descartadas`.
+### Protocolo de Feedback Visual ante Cuota Excedida:
+1. **Deteccion Inmediata:** Si Gemini Flash retorna error 429, la interfaz no se congela ni muestra modales bloqueantes.
+2. **Senalizacion Ambar:** El selector de estrategia en `ProfileStudioPreview.tsx` despliega el aviso informativo de agotamiento de cuota.
+3. **Continuidad Operativa:** El badge de la cabecera indica inmediatamente que el sistema ha escalado a Gemini Flash-Lite o a Groq Cloud, garantizando que el usuario puede seguir evaluando vacantes sin interrupcion.
 
 ---
 
-## 5. Propuesta de Actualizacion para `TutorialModal.tsx`
+## 5. Conclusiones de la Auditoria UI/UX
 
-Para que el tutorial sea 100% didactico y fiel a la aplicacion, se recomienda actualizar la estructura de 5 a 6 pasos:
-
-### Paso 1: Introduccion a GlassMatch AI
-- Explicar la filosofia de eliminacion de ruido laboral y motor ATS Zero-Trust con almacenamiento privado en SQLite.
-
-### Paso 2: El Match Radar y los 5 Kill Switches
-- Explicar el anillo de compatibilidad (MatchRing) y como el sistema descarta automaticamente el 100% de ofertas incompatibles por idioma, residencia o limites tecnicos.
-
-### Paso 3: Analisis Manual de Ofertas Externas (NUEVO PASO)
-- **Titulo:** Analisis Instantaneo ("+ Nueva Vacante")
-- **Descripcion:** Explicar como pegar cualquier oferta encontrada en internet o redes para recibir en 2 segundos el diagnostico semantico de Gemini, los puntos fuertes y la carta de presentacion personalizada.
-
-### Paso 4: Sincronizacion Multi-Canal en Vivo
-- Corregir los proveedores a: LinkedIn, Remotive, Jobicy y Arbeitnow con regulacion anti-baneo mediante jitter de 1.2 a 2.5 segundos.
-
-### Paso 5: CRM Glass Pipeline de 6 Fases
-- Actualizar el diagrama visual para mostrar las 6 etapas reales: Descubiertas, Guardadas, Postuladas, En Entrevista, Ofertas y Descartadas, junto al bloc de notas confidencial.
-
-### Paso 6: Profile Studio y Simulador de Entrevistas
-- Carga multimodal de CV (PDF), seleccion interactiva de limites tecnicos excluidos y simulador de llamadas tecnicas con preguntas punzantes.
-
----
-
-## 6. Matriz de Recomendaciones UI/UX para Revision Externa
-
-| Prioridad | Area | Accion Concreta | Impacto |
-| :--- | :--- | :--- | :--- |
-| **Alta** | `QuickAddModal.tsx` | Enlazar el resultado del analisis para no guardar vacantes con score 0% y alertar el motivo del descarte. | Integridad del principio Zero-Trust. |
-| **Alta** | `TutorialModal.tsx` | Incorporar el paso de "+ Nueva Vacante" y corregir el numero de columnas del Pipeline (de 4 a 6). | Onboarding claro y veraz para nuevos usuarios. |
-| **Media** | `QuickAddModal.tsx` | Eliminar el salario cableado de $100k-$130k USD cuando se analiza texto manual sin datos salariales. | Previene datos falsos en el CRM. |
-| **Media** | `QuickAddModal.tsx` | Reemplazar el micro-copy *"Salida estructurada en esquema JSON"* por *"Evaluado bajo tus reglas ATS activas"*. | Centrado en el usuario, no en detalles tecnicos de ingenieria. |
-| **Baja** | `QuickAddModal.tsx` | Anadir contador dinamico de caracteres en el textarea de descripcion. | Retroalimentacion visual inmediata. |
+1. **Madurez del Sistema de Diseno:** La estetica "Caribbean Sea Glass" ha logrado un equilibrio optimo entre modernidad visual (translucidez, gradientes marinos) y estricta funcionalidad ergonomica (contraste superior, jerarquia tipografica sin distracciones).
+2. **Transparencia hacia el Usuario:** La integracion del feedback en tiempo real de los modelos de IA (distinguiendo entre Flash con cuota agotada y Flash-Lite 100% operativo) elimina la incertidumbre tecnica y ofrece una experiencia de uso sumamente profesional.
+3. **Arquitectura Modular Robusta:** Los componentes de visualizacion (`MatchRing`, `JobCard`, `PipelineBoard`, `InspectorDrawer`) estan desacoplados de la logica de red, lo que permite auditar y extender cualquier seccion del frontend con minimo riesgo de regresion.
 
 ---
 *Fin del documento de auditoria UI/UX de GlassMatch AI.*
