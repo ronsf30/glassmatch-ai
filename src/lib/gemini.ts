@@ -59,6 +59,17 @@ export function getAiStrategy(): "smart_saving" | "maximum_precision" {
   return "smart_saving";
 }
 
+export function getAiEngineMode(): "cloud" | "offline_deterministic" {
+  try {
+    const stmt = db.prepare("SELECT value FROM AppConfig WHERE key = 'AI_ENGINE_MODE'");
+    const row = stmt.get() as { value: string } | undefined;
+    if (row?.value === "offline_deterministic" || row?.value === "cloud") {
+      return row.value;
+    }
+  } catch {}
+  return "cloud";
+}
+
 export interface GeminiCascadeResult {
   text: string;
   modelUsed: string;
@@ -79,6 +90,14 @@ export async function callGeminiApiWithCascade(
     preferredTier?: "flash" | "lite" | "auto";
   }
 ): Promise<GeminiCascadeResult | null> {
+  const engineMode = getAiEngineMode();
+  if (engineMode === "offline_deterministic") {
+    console.log(
+      "[AI Cascade] Modo Local Autónomo (offline_deterministic) activo: operando con 0 tokens sin peticiones a la nube."
+    );
+    return null;
+  }
+
   const apiKey = getGeminiApiKey();
   if (!apiKey || apiKey.trim().length < 10) {
     return null;

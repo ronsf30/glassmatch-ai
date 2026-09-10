@@ -8,12 +8,20 @@ export async function GET(req: Request) {
     const rawKey = row?.value || process.env.GEMINI_API_KEY || "";
 
     if (!rawKey || rawKey.trim().length < 10) {
+      const modeRow = db
+        .prepare("SELECT value FROM AppConfig WHERE key = 'AI_ENGINE_MODE'")
+        .get() as { value: string } | undefined;
+      const aiEngineMode = (modeRow?.value === "offline_deterministic" || modeRow?.value === "cloud")
+        ? modeRow.value
+        : "cloud";
+
       return NextResponse.json({
         hasKey: false,
         isConfigured: false,
         maskedKey: null,
         healthStatus: "no_key",
         statusMessage: "Sin clave configurada • Operando con Motor Local Autónomo",
+        aiEngineMode,
       });
     }
 
@@ -33,6 +41,13 @@ export async function GET(req: Request) {
     const aiStrategy = (paramStrategy === "maximum_precision" || paramStrategy === "smart_saving")
       ? paramStrategy
       : (strategyRow?.value || "smart_saving");
+
+    const modeRow = db
+      .prepare("SELECT value FROM AppConfig WHERE key = 'AI_ENGINE_MODE'")
+      .get() as { value: string } | undefined;
+    const aiEngineMode = (modeRow?.value === "offline_deterministic" || modeRow?.value === "cloud")
+      ? modeRow.value
+      : "cloud";
 
     let healthStatus:
       | "operational"
@@ -124,6 +139,7 @@ export async function GET(req: Request) {
       statusMessage,
       activeModel,
       aiStrategy,
+      aiEngineMode,
       flashAvailable,
       flashLiteAvailable,
       httpCode,
@@ -137,7 +153,11 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { apiKey, aiStrategy } = body as { apiKey?: string; aiStrategy?: string };
+    const { apiKey, aiStrategy, aiEngineMode } = body as {
+      apiKey?: string;
+      aiStrategy?: string;
+      aiEngineMode?: string;
+    };
 
     const now = new Date().toISOString();
 
@@ -160,6 +180,14 @@ export async function POST(req: Request) {
       `).run(aiStrategy, now);
     }
 
+    if (aiEngineMode && (aiEngineMode === "cloud" || aiEngineMode === "offline_deterministic")) {
+      db.prepare(`
+        INSERT INTO AppConfig (key, value, updatedAt)
+        VALUES ('AI_ENGINE_MODE', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt
+      `).run(aiEngineMode, now);
+    }
+
     const row = db
       .prepare("SELECT value FROM AppConfig WHERE key = 'GEMINI_API_KEY'")
       .get() as { value: string } | undefined;
@@ -169,12 +197,20 @@ export async function POST(req: Request) {
         ? `${currentKey.slice(0, 6)}...${currentKey.slice(-4)}`
         : "Configurada";
 
+    const currentModeRow = db
+      .prepare("SELECT value FROM AppConfig WHERE key = 'AI_ENGINE_MODE'")
+      .get() as { value: string } | undefined;
+    const resolvedMode = (currentModeRow?.value === "offline_deterministic" || currentModeRow?.value === "cloud")
+      ? currentModeRow.value
+      : "cloud";
+
     return NextResponse.json({
       success: true,
       hasKey: currentKey.length > 10,
       isConfigured: currentKey.length > 10,
       maskedKey,
       aiStrategy: aiStrategy || "smart_saving",
+      aiEngineMode: resolvedMode,
     });
   } catch (error) {
     return NextResponse.json({ error: "Error al guardar en AppConfig" }, { status: 500 });

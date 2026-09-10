@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import { Sparkles, Radar, Kanban, UserCheck, Plus, Zap, RefreshCw, HelpCircle } from "lucide-react";
+import { Sparkles, Radar, Kanban, UserCheck, Plus, Zap, RefreshCw, HelpCircle, Cloud, Cpu } from "lucide-react";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { ActiveTab } from "@/types";
 import { cn } from "@/lib/utils";
+import { useApp } from "@/context/AppContext";
 
 interface GlassHeaderProps {
   activeTab: ActiveTab;
@@ -21,6 +22,8 @@ export function GlassHeader({
   onOpenSync,
   onOpenTutorial,
 }: GlassHeaderProps) {
+  const { aiEngineMode, toggleAiEngineMode } = useApp();
+
   const tabs: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     {
       id: "radar",
@@ -86,8 +89,77 @@ export function GlassHeader({
           })}
         </nav>
 
-        {/* Right Actions: Tutorial + Sincronizar + Nueva Vacante */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* Right Actions: Switch Modo IA + Tutorial + Sincronizar + Nueva Vacante */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Dual Pill Switch (Desktop) */}
+          <div className="hidden md:flex items-center p-0.5 rounded-xl bg-slate-100/80 border border-teal-900/10 backdrop-blur-md shadow-2xs mr-1">
+            <button
+              type="button"
+              onClick={() => toggleAiEngineMode("cloud")}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer",
+                aiEngineMode === "cloud"
+                  ? "bg-white text-teal-950 shadow-xs border border-teal-500/25 font-semibold"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-white/40 border border-transparent"
+              )}
+              title="Modo IA Nube: Análisis semántico con Gemini 3.8 y respaldo Groq"
+            >
+              <span
+                className={cn(
+                  "w-1.5 h-1.5 rounded-full",
+                  aiEngineMode === "cloud" ? "bg-emerald-500 animate-pulse" : "bg-slate-300"
+                )}
+              />
+              <Cloud className="w-3.5 h-3.5 text-teal-600" />
+              <span>IA Nube</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleAiEngineMode("offline_deterministic")}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer",
+                aiEngineMode === "offline_deterministic"
+                  ? "bg-white text-teal-950 shadow-xs border border-teal-500/25 font-semibold"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-white/40 border border-transparent"
+              )}
+              title="Modo Local: Motor determinista a costo cero (0 Tokens)"
+            >
+              <span
+                className={cn(
+                  "w-1.5 h-1.5 rounded-full",
+                  aiEngineMode === "offline_deterministic" ? "bg-cyan-500" : "bg-slate-300"
+                )}
+              />
+              <Cpu className="w-3.5 h-3.5 text-cyan-600" />
+              <span>Local (0 Tokens)</span>
+            </button>
+          </div>
+
+          {/* Compact Pill Switch (Mobile) */}
+          <button
+            type="button"
+            onClick={() =>
+              toggleAiEngineMode(
+                aiEngineMode === "cloud" ? "offline_deterministic" : "cloud"
+              )
+            }
+            className={cn(
+              "flex md:hidden items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer mr-0.5",
+              aiEngineMode === "cloud"
+                ? "bg-emerald-50 text-emerald-800 border-emerald-500/30"
+                : "bg-cyan-50 text-cyan-800 border-cyan-500/30"
+            )}
+            title="Alternar entre IA Nube y Modo Local (0 Tokens)"
+          >
+            <span
+              className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                aiEngineMode === "cloud" ? "bg-emerald-500 animate-pulse" : "bg-cyan-500"
+              )}
+            />
+            <span>{aiEngineMode === "cloud" ? "Nube" : "Local"}</span>
+          </button>
+
           <GlassButton
             variant="glass"
             size="sm"

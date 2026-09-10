@@ -21,6 +21,8 @@ interface AppContextType {
   cvFileName: string;
   setCvFileName: (name: string) => void;
   isLoadingDb: boolean;
+  aiEngineMode: "cloud" | "offline_deterministic";
+  toggleAiEngineMode: (mode: "cloud" | "offline_deterministic") => Promise<void>;
 }
 
 const INITIAL_PROFILE: UserProfile = {
@@ -84,15 +86,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [cvFileName, setCvFileName] = useState("CV_Ronald_Silva_2026_Master.pdf");
   const [isLoadingDb, setIsLoadingDb] = useState(true);
   const [isRerolling, setIsRerolling] = useState(false);
+  const [aiEngineMode, setAiEngineMode] = useState<"cloud" | "offline_deterministic">("cloud");
 
   // Load state from local SQLite on initial mount
   useEffect(() => {
     async function loadFromSQLite() {
       try {
-        const [jobsRes, profileRes] = await Promise.all([
+        const [jobsRes, profileRes, configRes] = await Promise.all([
           fetch("/api/jobs"),
           fetch("/api/profile"),
+          fetch("/api/config/gemini?checkHealth=false"),
         ]);
+
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          if (
+            configData.aiEngineMode === "offline_deterministic" ||
+            configData.aiEngineMode === "cloud"
+          ) {
+            setAiEngineMode(configData.aiEngineMode);
+          }
+        }
 
         if (jobsRes.ok) {
           const jobsData = await jobsRes.json();
@@ -366,6 +380,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }).catch((e) => console.warn("Error adding job to SQLite:", e));
   };
 
+  const toggleAiEngineMode = async (mode: "cloud" | "offline_deterministic") => {
+    setAiEngineMode(mode);
+    try {
+      await fetch("/api/config/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aiEngineMode: mode }),
+      });
+    } catch (e) {
+      console.warn("Error persisting aiEngineMode:", e);
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -386,6 +413,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         cvFileName,
         setCvFileName,
         isLoadingDb,
+        aiEngineMode,
+        toggleAiEngineMode,
       }}
     >
       {children}
