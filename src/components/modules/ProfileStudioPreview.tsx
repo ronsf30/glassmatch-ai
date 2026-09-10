@@ -20,6 +20,7 @@ import {
   FileCheck,
   Key,
   ExternalLink,
+  Cpu,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { LanguageLevel } from "@/types";
@@ -156,6 +157,75 @@ export function ProfileStudioPreview() {
     }
     setIsSavingKey(false);
   };
+
+  // Backup AI states (Groq Cloud / Llama 3.3 70B)
+  const [backupKeyInput, setBackupKeyInput] = useState("");
+  const [hasBackupKey, setHasBackupKey] = useState(false);
+  const [maskedBackupKey, setMaskedBackupKey] = useState<string | null>(null);
+  const [isSavingBackupKey, setIsSavingBackupKey] = useState(false);
+  const [backupKeyNotice, setBackupKeyNotice] = useState<string | null>(null);
+  const [backupHealthStatus, setBackupHealthStatus] = useState<
+    "operational" | "rate_limited" | "invalid_key" | "checking" | "no_key"
+  >("checking");
+  const [backupStatusMessage, setBackupStatusMessage] = useState<string>(
+    "Sin clave de respaldo configurada"
+  );
+  const [isCheckingBackupHealth, setIsCheckingBackupHealth] = useState(false);
+
+  const checkBackupAiStatus = async (forceProbe = true) => {
+    setIsCheckingBackupHealth(true);
+    try {
+      const res = await fetch(`/api/config/backup-ai?checkHealth=${forceProbe}`);
+      const data = await res.json();
+      setHasBackupKey(Boolean(data.hasKey));
+      setMaskedBackupKey(data.maskedKey || null);
+      if (data.healthStatus) {
+        setBackupHealthStatus(data.healthStatus);
+        setBackupStatusMessage(data.statusMessage || "Estado de respaldo actualizado");
+      } else {
+        setBackupHealthStatus(data.hasKey ? "operational" : "no_key");
+      }
+    } catch {
+      setBackupHealthStatus("no_key");
+      setBackupStatusMessage("Sin conexión con proveedor de respaldo");
+    } finally {
+      setIsCheckingBackupHealth(false);
+    }
+  };
+
+  const handleSaveBackupKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!backupKeyInput.trim()) return;
+    setIsSavingBackupKey(true);
+    try {
+      const res = await fetch("/api/config/backup-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: backupKeyInput.trim(),
+          provider: "groq",
+          model: "llama-3.3-70b-versatile",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHasBackupKey(true);
+        setMaskedBackupKey(data.maskedKey);
+        setBackupKeyInput("");
+        setBackupKeyNotice("Clave de Groq guardada. Diagnosticando conexión...");
+        await checkBackupAiStatus(true);
+        setTimeout(() => setBackupKeyNotice(null), 4000);
+      }
+    } catch {
+      setBackupKeyNotice("Error al guardar clave de respaldo.");
+      setTimeout(() => setBackupKeyNotice(null), 3000);
+    }
+    setIsSavingBackupKey(false);
+  };
+
+  useEffect(() => {
+    checkBackupAiStatus(true);
+  }, []);
 
   // Keep local inputs synchronized with context profile
   useEffect(() => {
@@ -1002,6 +1072,118 @@ export function ProfileStudioPreview() {
                   className="inline-flex items-center gap-1 text-teal-700 font-bold hover:underline cursor-pointer"
                 >
                   <span>Obtener clave gratis en Google AI Studio</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </form>
+          </GlassCard>
+
+          {/* Groq Cloud Multi-Cloud Backup AI Card */}
+          <GlassCard className="p-4 sm:p-5 space-y-3 bg-white/90 border-cyan-500/30 shadow-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-cyan-900/10">
+              <div className="flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-cyan-600" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">
+                    Respaldo Externo: Groq Cloud
+                  </h4>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Llama 3.3 70B Versatile
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => checkBackupAiStatus(true)}
+                  disabled={isCheckingBackupHealth}
+                  title="Verificar conexión con Groq Cloud"
+                  className="p-1 rounded-md text-slate-500 hover:text-cyan-700 hover:bg-cyan-50 border border-slate-200 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <RefreshCw
+                    className={`w-3 h-3 ${isCheckingBackupHealth ? "animate-spin text-cyan-600" : ""}`}
+                  />
+                </button>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all ${
+                    !hasBackupKey
+                      ? "bg-slate-100 text-slate-700 border-slate-300"
+                      : backupHealthStatus === "operational"
+                      ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                      : backupHealthStatus === "rate_limited"
+                      ? "bg-amber-100 text-amber-900 border-amber-300"
+                      : backupHealthStatus === "invalid_key"
+                      ? "bg-rose-100 text-rose-900 border-rose-300"
+                      : "bg-cyan-50 text-cyan-800 border-cyan-200"
+                  }`}
+                >
+                  {isCheckingBackupHealth
+                    ? "Comprobando..."
+                    : !hasBackupKey
+                    ? "Sin Respaldo Configurado"
+                    : backupHealthStatus === "operational"
+                    ? "Groq 70B Operativo (Luz Verde)"
+                    : backupHealthStatus === "rate_limited"
+                    ? "Cuota en Espera (HTTP 429)"
+                    : backupHealthStatus === "invalid_key"
+                    ? "Clave Inválida"
+                    : "Clave Configurada"}
+                </span>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-600 leading-relaxed space-y-1.5">
+              {hasBackupKey ? (
+                <>
+                  <p>
+                    <span className="font-semibold text-slate-800">Clave de respaldo:</span> {maskedBackupKey}. {backupStatusMessage}
+                  </p>
+                  <div className="text-cyan-950 bg-cyan-50/70 p-2.5 rounded-xl border border-cyan-200/80 font-medium text-[10px]">
+                    Si Google AI Studio agota su cuota en Flash y Flash-Lite, GlassMatch conmutará automáticamente a Groq Llama 3.3 70B para no detener el radar ni tus análisis.
+                  </div>
+                </>
+              ) : (
+                <p>
+                  Conecta una clave gratuita de Groq Cloud para tener respaldo multi-nube ilimitado y evitar depender únicamente de la cuota de Google.
+                </p>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveBackupKey} className="space-y-2 pt-1">
+              <div className="flex gap-1.5">
+                <input
+                  type="password"
+                  placeholder={hasBackupKey ? "Cambiar API Key de Groq..." : "Pega tu Groq API Key (gsk_...)"}
+                  value={backupKeyInput}
+                  onChange={(e) => setBackupKeyInput(e.target.value)}
+                  className="flex-1 h-8 px-2.5 rounded-xl bg-white border border-cyan-900/15 text-slate-900 text-xs focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-400/20"
+                />
+                <GlassButton
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isSavingBackupKey}
+                  disabled={!backupKeyInput.trim()}
+                >
+                  Guardar
+                </GlassButton>
+              </div>
+
+              {backupKeyNotice && (
+                <p className="text-[11px] font-bold text-cyan-700">
+                  {backupKeyNotice}
+                </p>
+              )}
+
+              <div className="flex items-center justify-between pt-1 text-[10px] text-slate-500">
+                <span>¿No tienes clave de Groq?</span>
+                <a
+                  href="https://console.groq.com/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-cyan-700 font-bold hover:underline cursor-pointer"
+                >
+                  <span>Obtener clave gratis en Groq Cloud</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>

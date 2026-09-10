@@ -7,6 +7,7 @@ import {
 } from "@/types";
 import { sanitizeJobDescription } from "@/lib/utils";
 import { db } from "@/lib/db";
+import { callBackupAiProvider } from "@/lib/ai-providers";
 import dns from "node:dns";
 
 try {
@@ -101,6 +102,7 @@ export async function callGeminiApiWithCascade(
         ];
 
   for (const model of models) {
+    if (!apiKey || apiKey.trim().length < 10) break;
     try {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey.trim()}`;
       const response = await fetch(endpoint, {
@@ -131,6 +133,47 @@ export async function callGeminiApiWithCascade(
     } catch (err) {
       console.warn(`[Gemini Cascade] Error al consultar ${model.label}:`, err);
     }
+  }
+
+  // ==========================================================
+  // LEVEL 3: PROVEEDOR DE RESPALDO MULTI-CLOUD (GROQ / OPENAI)
+  // ==========================================================
+  try {
+    const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
+    for (const c of payload.contents || []) {
+      const role = c.role === "model" ? "assistant" : "user";
+      let text = "";
+      if (Array.isArray(c.parts)) {
+        text = c.parts
+          .map((p: any) => p.text || "")
+          .filter(Boolean)
+          .join("\n\n");
+      } else if (typeof c.text === "string") {
+        text = c.text;
+      }
+      if (text) {
+        messages.push({ role, content: text });
+      }
+    }
+
+    if (messages.length > 0) {
+      console.warn("[Multi-Cloud Cascade] Escalando al proveedor externo de respaldo (Groq / OpenAI)...");
+      const backupResult = await callBackupAiProvider({
+        messages,
+        jsonMode: payload.generationConfig?.responseMimeType === "application/json",
+        temperature: payload.generationConfig?.temperature ?? 0.1,
+      });
+
+      if (backupResult && backupResult.text) {
+        return {
+          text: backupResult.text,
+          modelUsed: backupResult.modelUsed,
+          modelId: backupResult.modelId,
+        };
+      }
+    }
+  } catch (backupErr) {
+    console.warn("[Multi-Cloud Cascade] Fallo en proveedor de respaldo:", backupErr);
   }
 
   return null;
@@ -573,6 +616,8 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura:
         const engineUsed =
           cascadeResult.modelId === "gemini-flash-lite-latest"
             ? "gemini_3_8_flash_lite"
+            : cascadeResult.modelId.includes("llama") || cascadeResult.modelUsed.includes("Groq")
+            ? "groq_llama_70b"
             : "gemini_3_8_flash";
 
         return {
