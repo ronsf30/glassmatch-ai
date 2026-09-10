@@ -249,7 +249,9 @@ Si la vacante cumple con TAN SOLO UNA de las siguientes condiciones, el match es
 1. BARRERA GEOGRÁFICA Y LEGAL:
    - Si la vacante exige residencia física en un país distinto a ${profile.location} y no ofrece modalidad remota global.
    - Si exige "US Citizen only", "Green Card", "W2 only", "No C2C", o autorización previa de trabajo local, salvo que el candidato posea visa según ${profile.visaStatus}.
-   - EXCEPCIÓN: Si la vacante indica explícitamente "Contractor", "B2B", "Worldwide Remote" o "LATAM Remote", NO se descartará por no ofrecer patrocinio de visa (no sponsorship).
+   - Si exige autorización o investigación de seguridad federal de EE. UU. ("Public Trust Clearance", "Security Clearance", "Secret", etc.) o roles para agencias del gobierno o contratistas de defensa de EE. UU. (ej. KGS, DoD, etc.).
+   - Si incluye beneficios de nómina doméstica de EE. UU. (401k, FSA, HSA) sin indicar relación comercial contractor/B2B internacional.
+   - EXCEPCIÓN: Si la vacante indica explícitamente "Contractor", "B2B", "Worldwide Remote" o "LATAM Remote" Y NO exige autorizaciones de seguridad federal (Public Trust / Clearance), NO se descartará por no ofrecer patrocinio de visa (no sponsorship).
 
 2. DESVIACIÓN DE DISCIPLINA:
    - Si el objetivo troncal del puesto difiere de ${profile.role} (por ejemplo, rechazar roles de soporte técnico, ventas, arquitectura civil o tareas puras de análisis si el perfil es de desarrollo/diseño).
@@ -295,21 +297,42 @@ export function runDeterministicKillSwitches(
   const fullText = `${job.title}\n${cleanDescription}`;
 
   // ==========================================================
-  // KILL SWITCH 1: BARRERA GEOGRÁFICA Y LEGAL (Smart Contractor)
+  // KILL SWITCH 1: BARRERA GEOGRÁFICA, LEGAL Y DE SEGURIDAD
   // ==========================================================
+  // 1.1 Bloqueo incondicional: Autorizaciones de Seguridad Federal y Clientes Gubernamentales
+  // Ningún contractor internacional remoto puede acceder a Public Trust Clearance ni Security Clearance de EE. UU.
+  const federalClearanceBlockers = [
+    /\b(public trust(\s+clearance)?|ability to obtain (a )?public trust|federal clearance|security clearance|active (secret|top secret|ts\/sci)|clearance required|security investigation)\b/i,
+    /\b(government customer|federal customer|defense contractor|government contractor|federal agency|department of defense|dod clearance)\b/i,
+  ];
+
+  for (const regex of federalClearanceBlockers) {
+    if (regex.test(fullText)) {
+      return {
+        isMatch: false,
+        matchScore: 0,
+        killSwitchTriggered: "BARRERA_GEOGRAFICA_LEGAL",
+        reason: "Requiere autorización de seguridad federal (Public Trust / Security Clearance) o rol para contratista gubernamental de EE. UU.",
+      };
+    }
+  }
+
+  // 1.2 Bloqueo de nómina doméstica y residencia estricta en EE. UU.
   const isExplicitContractor =
     /\b(contractor|b2b|anywhere|worldwide|latam|global remote|work from anywhere)\b/i.test(fullText);
 
   if (!isExplicitContractor) {
     const hardLegalBlockers = [
-      /\b(must be (a )?us citizen|us citizenship required)\b/i,
+      /\b(must be (a )?us citizen|us citizenship required|citizen of the united states|u\.s\. citizen(ship)?)\b/i,
       /\b(green card (holder|only))\b/i,
-      /\b(w2 only|no c2c|no corp[- ]to[- ]corp)\b/i,
-      /\b(security clearance required|active secret clearance)\b/i,
+      /\b(w[- ]?2 only|no c2c|no corp[- ]to[- ]corp)\b/i,
       /\b(must reside in (the )?(us|united states|uk|germany|canada))\b/i,
       /\b(being a resident in [a-zA-Z]+ for the last year)\b/i,
       /\b(office environment|in-office|in our [a-zA-Z\s]+ office|on-site|onsite|relocation (assistance|required)|hybrid schedule in [a-zA-Z\s]+)\b/i,
       /\b(must be located in|only open to residents of)\s+[a-zA-Z\s,]+/i,
+      /\b(401\s*\(?k\)?(\s+match(ing)?)?|flexible spending account|fsa|hsa|health savings account)\b/i,
+      /\b(authorized to work in the (us|united states|u\.s\.) without (visa )?sponsorship)\b/i,
+      /\b(unable to (sponsor|provide sponsorship)|not offering (visa )?sponsorship)\b/i,
     ];
 
     for (const regex of hardLegalBlockers) {
@@ -318,7 +341,7 @@ export function runDeterministicKillSwitches(
           isMatch: false,
           matchScore: 0,
           killSwitchTriggered: "BARRERA_GEOGRAFICA_LEGAL",
-          reason: "Exige presencia en oficina o residencia física local en el país empleador.",
+          reason: "Exige presencia en oficina, residencia física local, beneficios de nómina doméstica de EE. UU. o visado W-2 exclusivo.",
         };
       }
     }

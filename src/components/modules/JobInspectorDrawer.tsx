@@ -269,9 +269,23 @@ export function JobInspectorDrawer({
                 <div className="p-5 rounded-2xl bg-gradient-to-br from-teal-50/90 via-cyan-50/60 to-emerald-50/40 border border-teal-200/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
                   <MatchRing score={job.match.matchScore} size="md" showLabel />
                   <div className="flex-1 text-center sm:text-left">
-                    <div className="flex items-center justify-center sm:justify-start gap-1.5 text-xs font-bold text-teal-800 uppercase tracking-wider mb-1">
-                      <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                      Diagnóstico Semántico Gemini Flash AI
+                    <div className="flex items-center justify-center sm:justify-start gap-1.5 text-xs font-bold uppercase tracking-wider mb-1">
+                      {job.match.aiProvider === "offline_deterministic" || !job.match.isLiveAi ? (
+                        <>
+                          <Cpu className="w-3.5 h-3.5 text-cyan-600" />
+                          <span className="text-cyan-900">Diagnóstico Determinista Motor Local</span>
+                        </>
+                      ) : job.match.aiProvider === "groq" ? (
+                        <>
+                          <Cpu className="w-3.5 h-3.5 text-indigo-600" />
+                          <span className="text-indigo-900">Diagnóstico Semántico Groq Cloud (70B)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                          <span className="text-teal-900">Diagnóstico Semántico Gemini Flash AI</span>
+                        </>
+                      )}
                     </div>
                     <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-medium">
                       {job.match.executiveSummary}
