@@ -26,6 +26,8 @@ export interface JobOffer {
   workMode: WorkMode;
   url: string;
   salaryText?: string;
+  minAnnualSalary?: number;
+  maxAnnualSalary?: number;
   description: string;
   source: "LinkedIn" | "Indeed" | "Glassdoor" | "Manual" | "ZipRecruiter" | "Remotive" | "Jobicy" | "Arbeitnow";
   publishedAt?: string;
@@ -47,6 +49,8 @@ export interface JobMatch {
   interviewAdvice: string;
   generatedPitch?: string;
   languageRequirement?: JobLanguageRequirement;
+  isLiveAi?: boolean;
+  aiProvider?: "gemini" | "groq" | "offline_deterministic";
   analyzedAt: string;
 }
 

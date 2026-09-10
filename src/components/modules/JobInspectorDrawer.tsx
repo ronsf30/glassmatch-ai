@@ -20,13 +20,14 @@ import {
   Eye,
   EyeOff,
   Globe2,
+  Cpu,
 } from "lucide-react";
 import { JobOffer, InterviewQuestion } from "@/types";
 import { MatchRing } from "@/components/ui/MatchRing";
 import { GlassBadge } from "@/components/ui/GlassBadge";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { useApp } from "@/context/AppContext";
-import { getLiveJobUrl } from "@/lib/utils";
+import { getLiveJobUrl, meetsProgressiveSalaryExpectation } from "@/lib/utils";
 
 interface JobInspectorDrawerProps {
   job: JobOffer | null;
@@ -160,6 +161,21 @@ export function JobInspectorDrawer({
                     {job.workMode.toUpperCase()}
                   </GlassBadge>
 
+                  {/* Engine Traceability Badge */}
+                  {job.match?.aiProvider === "offline_deterministic" || !job.match?.isLiveAi ? (
+                    <GlassBadge variant="sky" size="sm" icon={<Cpu className="w-3 h-3 text-cyan-700" />}>
+                      Evaluado en Local (0 Tokens)
+                    </GlassBadge>
+                  ) : job.match?.aiProvider === "groq" ? (
+                    <GlassBadge variant="indigo" size="sm" icon={<Cpu className="w-3 h-3 text-indigo-600" />}>
+                      Auditado con Groq Cloud (70B)
+                    </GlassBadge>
+                  ) : (
+                    <GlassBadge variant="emerald" size="sm" icon={<Sparkles className="w-3 h-3 text-teal-600" />}>
+                      Auditado con Gemini 3.8
+                    </GlassBadge>
+                  )}
+
                   {/* ATS Kill Switch Status Badge */}
                   {job.match?.killSwitchTriggered ? (
                     <GlassBadge variant="rose" size="sm">
@@ -176,11 +192,19 @@ export function JobInspectorDrawer({
                     {job.match?.languageRequirement || "Inglés B1/B2 OK"}
                   </GlassBadge>
 
-                  {job.salaryText && (
-                    <GlassBadge variant="amber" size="sm" icon={<DollarSign className="w-3 h-3" />}>
-                      {job.salaryText}
-                    </GlassBadge>
-                  )}
+                  {/* Progressive Salary Badge */}
+                  {job.salaryText && (() => {
+                    const check = meetsProgressiveSalaryExpectation(job.salaryText, profile.minSalary || 35000, true);
+                    return (
+                      <GlassBadge
+                        variant={check.parsed && check.diff > 0 ? "emerald" : check.parsed && check.diff < 0 ? "rose" : "amber"}
+                        size="sm"
+                        icon={<DollarSign className="w-3 h-3" />}
+                      >
+                        {job.salaryText} {check.parsed && check.diff > 0 ? `(+${Math.round(check.diff / 1000)}k sobre piso)` : ""}
+                      </GlassBadge>
+                    );
+                  })()}
                 </div>
 
                 <h2 className="text-xl font-bold text-slate-900 tracking-tight leading-snug">

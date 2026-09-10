@@ -14,6 +14,9 @@ import {
   Globe2,
   AlertTriangle,
   CheckCircle2,
+  Cpu,
+  Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import { JobOffer, JobLanguageRequirement } from "@/types";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -21,7 +24,12 @@ import { GlassButton } from "@/components/ui/GlassButton";
 import { GlassBadge } from "@/components/ui/GlassBadge";
 import { MatchRing } from "@/components/ui/MatchRing";
 import { useApp } from "@/context/AppContext";
-import { cn, getLiveJobUrl } from "@/lib/utils";
+import {
+  cn,
+  getLiveJobUrl,
+  getJobFingerprint,
+  meetsProgressiveSalaryExpectation,
+} from "@/lib/utils";
 
 interface MatchRadarPreviewProps {
   onSelectJob: (job: JobOffer) => void;
@@ -113,11 +121,12 @@ export function MatchRadarPreview({
   onOpenSync,
   onRerollSuccess,
 }: MatchRadarPreviewProps) {
-  const { jobs, profile, rerollJobs, isRerolling, blacklistCompany } = useApp();
+  const { jobs, profile, rerollJobs, isRerolling, blacklistCompany, aiEngineMode } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterScore85, setFilterScore85] = useState(false);
   const [filterRemoteOnly, setFilterRemoteOnly] = useState(false);
-  const [filterSalary, setFilterSalary] = useState(false);
+  const [filterSalaryProgressive, setFilterSalaryProgressive] = useState(false);
+  const [filterSalaryDeclaredOnly, setFilterSalaryDeclaredOnly] = useState(false);
   const [filterLanguageB1B2, setFilterLanguageB1B2] = useState(false);
   const [selectedSource, setSelectedSource] = useState<string>("all");
 
@@ -126,15 +135,16 @@ export function MatchRadarPreview({
     onRerollSuccess?.(count);
   };
 
-  // Filtered Job List: strictly exclude non-matching or kill switch jobs
+  // Filtered Job List: strictly exclude non-matching or kill switch jobs + progressive salary + deduplication
   const filteredJobs = useMemo(() => {
     const blacklist = (profile.blacklistCompanies || []).map((b) =>
       b.toLowerCase()
     );
 
     const termLower = searchTerm.trim().toLowerCase();
+    const minExpectedSalary = profile.minSalary || 35000;
 
-    return jobs.filter((job) => {
+    const candidates = jobs.filter((job) => {
       // Excluir de inmediato vacantes que no hacen match o dispararon un Kill Switch
       if (
         job.match &&
@@ -175,8 +185,19 @@ export function MatchRadarPreview({
       // Remote filter
       if (filterRemoteOnly && job.workMode !== "remote") return false;
 
-      // Salary filter
-      if (filterSalary && !job.salaryText) return false;
+      // Progressive Salary filter:
+      // Si filterSalaryProgressive está activo, se descartan ofertas cuyo salario declarado esté por debajo del piso salarial.
+      // Ofertas que paguen más (o que igualen el piso) se aprueban.
+      if (filterSalaryProgressive) {
+        const check = meetsProgressiveSalaryExpectation(
+          job.salaryText,
+          minExpectedSalary,
+          !filterSalaryDeclaredOnly
+        );
+        if (!check.meets) return false;
+      } else if (filterSalaryDeclaredOnly && !job.salaryText) {
+        return false;
+      }
 
       // Language filter: exclude C1/C2 if user wants B1/B2 compatible
       if (filterLanguageB1B2) {
@@ -186,14 +207,29 @@ export function MatchRadarPreview({
 
       return true;
     });
+
+    // Deduplicación canónica en pantalla por huella digital (empresa normalizada + cargo)
+    const seenFingerprints = new Set<string>();
+    const deduplicated: JobOffer[] = [];
+    for (const job of candidates) {
+      const fp = getJobFingerprint(job.company, job.title);
+      if (!seenFingerprints.has(fp)) {
+        seenFingerprints.add(fp);
+        deduplicated.push(job);
+      }
+    }
+
+    return deduplicated;
   }, [
     jobs,
     profile.blacklistCompanies,
+    profile.minSalary,
     searchTerm,
     selectedSource,
     filterScore85,
     filterRemoteOnly,
-    filterSalary,
+    filterSalaryProgressive,
+    filterSalaryDeclaredOnly,
     filterLanguageB1B2,
   ]);
 
@@ -293,15 +329,28 @@ export function MatchRadarPreview({
             </button>
 
             <button
-              onClick={() => setFilterSalary(!filterSalary)}
+              onClick={() => setFilterSalaryProgressive(!filterSalaryProgressive)}
               className={cn(
-                "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                filterSalary
-                  ? "bg-amber-50 text-amber-900 border-amber-500 font-bold"
+                "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5",
+                filterSalaryProgressive
+                  ? "bg-amber-50 text-amber-950 border-amber-500 font-bold shadow-2xs"
                   : "bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-100"
               )}
             >
-              Con Salario
+              <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+              <span>Sueldo ≥ ${(profile.minSalary || 35000).toLocaleString()} USD</span>
+            </button>
+
+            <button
+              onClick={() => setFilterSalaryDeclaredOnly(!filterSalaryDeclaredOnly)}
+              className={cn(
+                "px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                filterSalaryDeclaredOnly
+                  ? "bg-slate-800 text-white border-slate-900 font-bold"
+                  : "bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-100"
+              )}
+            >
+              Solo Salario Público
             </button>
           </div>
 
@@ -326,14 +375,21 @@ export function MatchRadarPreview({
       </div>
 
       {/* Feed Counter & Sync Trigger */}
-      <div className="flex items-center justify-between px-2 text-xs text-slate-600">
-        <span>
-          Mostrando <strong className="text-slate-900 font-bold">{filteredJobs.length}</strong> de{" "}
-          <strong className="text-slate-900 font-bold">{jobs.length}</strong> oportunidades
-        </span>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-2 text-xs text-slate-600">
+        <div className="flex items-center gap-2">
+          <span>
+            Mostrando <strong className="text-slate-900 font-bold">{filteredJobs.length}</strong> ofertas únicas (Deduplicadas) de{" "}
+            <strong className="text-slate-900 font-bold">{jobs.length}</strong> en base de datos
+          </span>
+          {filterSalaryProgressive && (
+            <span className="hidden md:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300">
+              Piso progresivo: ≥ ${(profile.minSalary || 35000).toLocaleString()} USD
+            </span>
+          )}
+        </div>
         <button
           onClick={onOpenSync}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold border border-teal-200 transition-all cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold border border-teal-200 transition-all cursor-pointer self-start sm:self-auto"
         >
           <RefreshCw className="w-3.5 h-3.5 text-teal-600" />
           <span>Sincronizar Ofertas en Vivo</span>
@@ -366,7 +422,8 @@ export function MatchRadarPreview({
                     setSearchTerm("");
                     setFilterScore85(false);
                     setFilterRemoteOnly(false);
-                    setFilterSalary(false);
+                    setFilterSalaryProgressive(false);
+                    setFilterSalaryDeclaredOnly(false);
                     setFilterLanguageB1B2(false);
                     setSelectedSource("all");
                   }}
@@ -398,7 +455,7 @@ export function MatchRadarPreview({
                     )}
 
                     <div className="flex-1 min-w-0">
-                      {/* Meta Row: Indicador Semántico Explícito Verde vs Amarillo */}
+                      {/* Meta Row: Indicador Semántico Explícito Verde vs Amarillo + Motor + Sueldo */}
                       <div className="flex flex-wrap items-center gap-1.5 mb-1.5 text-[11px]">
                         {/* Indicador Explícito de Estado de Compatibilidad */}
                         {diagnosis.isElite ? (
@@ -413,16 +470,56 @@ export function MatchRadarPreview({
                           </span>
                         )}
 
+                        {/* Insignia de Trazabilidad del Motor Evaluador */}
+                        {job.match?.aiProvider === "offline_deterministic" || !job.match?.isLiveAi ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold bg-cyan-50 text-cyan-900 border border-cyan-200">
+                            <Cpu className="w-3 h-3 text-cyan-700" />
+                            Local (0 Tokens)
+                          </span>
+                        ) : job.match?.aiProvider === "groq" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold bg-cyan-50 text-cyan-950 border border-cyan-300">
+                            <Cpu className="w-3 h-3 text-cyan-600" />
+                            Groq Cloud (70B)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold bg-teal-50 text-teal-900 border border-teal-300">
+                            <Sparkles className="w-3 h-3 text-teal-600" />
+                            Gemini 3.8
+                          </span>
+                        )}
+
                         {/* Modalidad */}
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                           {job.workMode === "remote" ? "Remoto Global" : job.workMode.toUpperCase()}
                         </span>
 
-                        {job.salaryText && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-800 border border-slate-200">
-                            {job.salaryText}
-                          </span>
-                        )}
+                        {/* Sueldo Progresivo con Comparación de Piso */}
+                        {job.salaryText && (() => {
+                          const check = meetsProgressiveSalaryExpectation(
+                            job.salaryText,
+                            profile.minSalary || 35000,
+                            true
+                          );
+                          return (
+                            <span
+                              className={cn(
+                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-semibold border",
+                                check.parsed && check.diff > 0
+                                  ? "bg-emerald-50 text-emerald-900 border-emerald-300 font-bold"
+                                  : check.parsed && check.diff < 0
+                                  ? "bg-rose-50 text-rose-900 border-rose-200"
+                                  : "bg-slate-100 text-slate-800 border-slate-200"
+                              )}
+                            >
+                              <span>{job.salaryText}</span>
+                              {check.parsed && check.diff > 0 && (
+                                <span className="text-[10px] text-emerald-700 font-bold">
+                                  (+${Math.round(check.diff / 1000)}k/año)
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })()}
 
                         {renderLanguageBadge(job.match?.languageRequirement)}
 

@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import path from "path";
 import fs from "fs";
 import { JobOffer, UserProfile, ApplicationStatus } from "@/types";
+import { getJobFingerprint, parseSalary } from "@/lib/utils";
 
 // Ensure prisma directory exists
 const dbDir = path.join(process.cwd(), "prisma");
@@ -117,6 +118,18 @@ try {
 try {
   db.exec("ALTER TABLE JobMatch ADD COLUMN languageRequirement TEXT;");
 } catch {}
+try {
+  db.exec("ALTER TABLE JobOffer ADD COLUMN dedupFingerprint TEXT;");
+} catch {}
+try {
+  db.exec("ALTER TABLE JobOffer ADD COLUMN minAnnualSalary REAL;");
+} catch {}
+try {
+  db.exec("ALTER TABLE JobOffer ADD COLUMN maxAnnualSalary REAL;");
+} catch {}
+try {
+  db.exec("ALTER TABLE JobMatch ADD COLUMN aiProvider TEXT;");
+} catch {}
 
 /**
  * Seed initial candidate profile and jobs if SQLite database is empty or update profile fields
@@ -225,22 +238,28 @@ export function saveJobToDb(job: JobOffer) {
   }
 
   // Verificar si ya existe una vacante con la misma URL o la misma combinación (empresa + título)
+  const fingerprint = getJobFingerprint(job.company, job.title);
   const cleanUrl = (job.url || "").split("?")[0].toLowerCase().trim();
   const existingJob = db
     .prepare(`
       SELECT id FROM JobOffer 
-      WHERE (url = ? AND url NOT LIKE '%/jobs/search%')
+      WHERE (dedupFingerprint IS NOT NULL AND dedupFingerprint = ?)
+         OR (url = ? AND url NOT LIKE '%/jobs/search%')
          OR (LOWER(TRIM(company)) = LOWER(TRIM(?)) AND LOWER(TRIM(title)) = LOWER(TRIM(?)))
       LIMIT 1
     `)
-    .get(cleanUrl, job.company, job.title) as { id: string } | undefined;
+    .get(fingerprint, cleanUrl, job.company, job.title) as { id: string } | undefined;
 
   const targetJobId = existingJob ? existingJob.id : job.id;
 
+  const parsedSal = parseSalary(job.salaryText);
+  const minAnnualSalary = parsedSal?.minAnnual || null;
+  const maxAnnualSalary = parsedSal?.maxAnnual || null;
+
   const insertJob = db.prepare(`
     INSERT OR REPLACE INTO JobOffer (
-      id, title, company, location, workMode, url, salaryText, description, source, publishedAt, createdAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, title, company, location, workMode, url, salaryText, minAnnualSalary, maxAnnualSalary, dedupFingerprint, description, source, publishedAt, createdAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   insertJob.run(
@@ -251,6 +270,9 @@ export function saveJobToDb(job: JobOffer) {
     job.workMode,
     job.url,
     job.salaryText || null,
+    minAnnualSalary,
+    maxAnnualSalary,
+    fingerprint,
     job.description,
     job.source,
     job.publishedAt || null,
@@ -263,12 +285,27 @@ export function saveJobToDb(job: JobOffer) {
       .get(targetJobId) as { id: string } | undefined;
     const targetMatchId = existingMatch ? existingMatch.id : (job.match.id || `match-${targetJobId}`);
 
+    let provider = job.match.aiProvider;
+    if (!provider) {
+      try {
+        const engineRow = db.prepare("SELECT value FROM AppConfig WHERE key = 'AI_ENGINE_MODE'").get() as any;
+        if (engineRow?.value === "offline_deterministic") {
+          provider = "offline_deterministic";
+        } else {
+          const provRow = db.prepare("SELECT value FROM AppConfig WHERE key = 'ACTIVE_CLOUD_PROVIDER'").get() as any;
+          provider = provRow?.value === "groq" ? "groq" : "gemini";
+        }
+      } catch {
+        provider = "gemini";
+      }
+    }
+
     const insertMatch = db.prepare(`
       INSERT OR REPLACE INTO JobMatch (
         id, jobOfferId, matchScore, isMatch, killSwitchTriggered, reason,
         executiveSummary, strengths, missingSkills, interviewAdvice,
-        generatedPitch, languageRequirement, analyzedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        generatedPitch, languageRequirement, aiProvider, analyzedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     insertMatch.run(
@@ -284,6 +321,7 @@ export function saveJobToDb(job: JobOffer) {
       job.match.interviewAdvice,
       job.match.generatedPitch || null,
       job.match.languageRequirement || "Spanish",
+      provider,
       job.match.analyzedAt
     );
   }
@@ -318,7 +356,7 @@ export function updateTrackerInDb(
 }
 
 /**
- * Get all jobs joined with Match and Tracker from SQLite
+ * Get all jobs joined with Match and Tracker from SQLite with canonical deduplication
  */
 export function getAllJobsFromDb(): JobOffer[] {
   const jobRows = db
@@ -328,12 +366,11 @@ export function getAllJobsFromDb(): JobOffer[] {
       WHERE (JobMatch.isMatch IS NULL OR JobMatch.isMatch != 0)
         AND (JobMatch.matchScore IS NULL OR JobMatch.matchScore > 0)
         AND (JobMatch.killSwitchTriggered IS NULL)
-      GROUP BY LOWER(TRIM(JobOffer.company)), LOWER(TRIM(JobOffer.title))
       ORDER BY JobOffer.rowid DESC
     `)
     .all() as any[];
 
-  return jobRows.map((row) => {
+  const rawJobs: JobOffer[] = jobRows.map((row) => {
     const matchRow = db
       .prepare("SELECT * FROM JobMatch WHERE jobOfferId = ?")
       .get(row.id) as any;
@@ -357,6 +394,7 @@ export function getAllJobsFromDb(): JobOffer[] {
         interviewAdvice: matchRow.interviewAdvice,
         generatedPitch: matchRow.generatedPitch,
         languageRequirement: matchRow.languageRequirement || "Spanish",
+        aiProvider: matchRow.aiProvider || "gemini",
         analyzedAt: matchRow.analyzedAt,
       };
     }
@@ -381,6 +419,8 @@ export function getAllJobsFromDb(): JobOffer[] {
       workMode: row.workMode,
       url: row.url,
       salaryText: row.salaryText,
+      minAnnualSalary: row.minAnnualSalary || undefined,
+      maxAnnualSalary: row.maxAnnualSalary || undefined,
       description: row.description,
       source: row.source,
       publishedAt: row.publishedAt,
@@ -389,6 +429,27 @@ export function getAllJobsFromDb(): JobOffer[] {
       tracking,
     };
   });
+
+  // Deduplicación reactiva canónica en memoria por huella digital
+  const dedupMap = new Map<string, JobOffer>();
+  for (const job of rawJobs) {
+    const fp = getJobFingerprint(job.company, job.title);
+    if (!dedupMap.has(fp)) {
+      dedupMap.set(fp, job);
+    } else {
+      const existing = dedupMap.get(fp)!;
+      // Priorizar el que tenga seguimiento en Kanban o mayor puntuación de afinidad
+      const existingTracked = Boolean(existing.tracking && existing.tracking.status !== "saved");
+      const jobTracked = Boolean(job.tracking && job.tracking.status !== "saved");
+      if (jobTracked && !existingTracked) {
+        dedupMap.set(fp, job);
+      } else if ((job.match?.matchScore || 0) > (existing.match?.matchScore || 0)) {
+        dedupMap.set(fp, job);
+      }
+    }
+  }
+
+  return Array.from(dedupMap.values());
 }
 
 /**

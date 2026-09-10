@@ -29,6 +29,7 @@ export interface GeminiMatchResponse {
   atsKeywords: string[];
   languageRequirement: JobLanguageRequirement;
   isLiveAi: boolean;
+  aiProvider?: "gemini" | "groq" | "offline_deterministic";
 }
 
 export type PitchTone = "direct" | "executive" | "impact";
@@ -560,6 +561,7 @@ ${cleanDescription.slice(0, 4000)}
             : [],
           languageRequirement: langReq,
           isLiveAi: true,
+          aiProvider: getActiveCloudProvider() === "groq" ? "groq" : "gemini",
         };
       }
     } catch (err) {
@@ -1463,5 +1465,6 @@ function generateHeuristicAnalysis(
         : [candidateSkills[0] || "Software Developer"],
     languageRequirement: langReq,
     isLiveAi: false,
+    aiProvider: "offline_deterministic",
   };
 }
