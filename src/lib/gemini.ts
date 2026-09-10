@@ -299,21 +299,28 @@ export function runDeterministicKillSwitches(
   // ==========================================================
   // KILL SWITCH 1: BARRERA GEOGRÁFICA, LEGAL Y DE SEGURIDAD
   // ==========================================================
-  // 1.1 Bloqueo incondicional: Autorizaciones de Seguridad Federal y Clientes Gubernamentales
-  // Ningún contractor internacional remoto puede acceder a Public Trust Clearance ni Security Clearance de EE. UU.
-  const federalClearanceBlockers = [
-    /\b(public trust(\s+clearance)?|ability to obtain (a )?public trust|federal clearance|security clearance|active (secret|top secret|ts\/sci)|clearance required|security investigation)\b/i,
-    /\b(government customer|federal customer|defense contractor|government contractor|federal agency|department of defense|dod clearance)\b/i,
-  ];
+  const isUsAuthorizedCandidate =
+    /ciudadan|resident|permiso completo|us citizen|permanent resident|green card/i.test(
+      profile.visaStatus || ""
+    );
 
-  for (const regex of federalClearanceBlockers) {
-    if (regex.test(fullText)) {
-      return {
-        isMatch: false,
-        matchScore: 0,
-        killSwitchTriggered: "BARRERA_GEOGRAFICA_LEGAL",
-        reason: "Requiere autorización de seguridad federal (Public Trust / Security Clearance) o rol para contratista gubernamental de EE. UU.",
-      };
+  // 1.1 Bloqueo de Autorizaciones de Seguridad Federal y Clientes Gubernamentales
+  // Aplica para candidatos que no cuentan con ciudadanía o autorización legal en EE. UU.
+  if (!isUsAuthorizedCandidate) {
+    const federalClearanceBlockers = [
+      /\b(public trust(\s+clearance)?|ability to obtain (a )?public trust|federal clearance|security clearance|active (secret|top secret|ts\/sci)|clearance required|security investigation)\b/i,
+      /\b(government customer|federal customer|defense contractor|government contractor|federal agency|department of defense|dod clearance)\b/i,
+    ];
+
+    for (const regex of federalClearanceBlockers) {
+      if (regex.test(fullText)) {
+        return {
+          isMatch: false,
+          matchScore: 0,
+          killSwitchTriggered: "BARRERA_GEOGRAFICA_LEGAL",
+          reason: "Requiere autorización de seguridad federal (Public Trust / Security Clearance) o rol para contratista gubernamental de EE. UU.",
+        };
+      }
     }
   }
 
@@ -323,16 +330,20 @@ export function runDeterministicKillSwitches(
 
   if (!isExplicitContractor) {
     const hardLegalBlockers = [
-      /\b(must be (a )?us citizen|us citizenship required|citizen of the united states|u\.s\. citizen(ship)?)\b/i,
-      /\b(green card (holder|only))\b/i,
-      /\b(w[- ]?2 only|no c2c|no corp[- ]to[- ]corp)\b/i,
-      /\b(must reside in (the )?(us|united states|uk|germany|canada))\b/i,
+      ...(!isUsAuthorizedCandidate
+        ? [
+            /\b(must be (a )?us citizen|us citizenship required|citizen of the united states|u\.s\. citizen(ship)?)\b/i,
+            /\b(green card (holder|only))\b/i,
+            /\b(w[- ]?2 only|no c2c|no corp[- ]to[- ]corp)\b/i,
+            /\b(must reside in (the )?(us|united states|uk|germany|canada))\b/i,
+            /\b(401\s*\(?k\)?(\s+match(ing)?)?|flexible spending account|fsa|hsa|health savings account)\b/i,
+            /\b(authorized to work in the (us|united states|u\.s\.) without (visa )?sponsorship)\b/i,
+            /\b(unable to (sponsor|provide sponsorship)|not offering (visa )?sponsorship)\b/i,
+          ]
+        : []),
       /\b(being a resident in [a-zA-Z]+ for the last year)\b/i,
       /\b(office environment|in-office|in our [a-zA-Z\s]+ office|on-site|onsite|relocation (assistance|required)|hybrid schedule in [a-zA-Z\s]+)\b/i,
       /\b(must be located in|only open to residents of)\s+[a-zA-Z\s,]+/i,
-      /\b(401\s*\(?k\)?(\s+match(ing)?)?|flexible spending account|fsa|hsa|health savings account)\b/i,
-      /\b(authorized to work in the (us|united states|u\.s\.) without (visa )?sponsorship)\b/i,
-      /\b(unable to (sponsor|provide sponsorship)|not offering (visa )?sponsorship)\b/i,
     ];
 
     for (const regex of hardLegalBlockers) {

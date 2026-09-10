@@ -128,11 +128,24 @@ export function MatchRadarPreview({
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Advanced Filters State (Manual & Customizable)
+  const isProfileUsAuthorized = useMemo(() => {
+    return /ciudadan|resident|permiso completo|us citizen|permanent resident|green card/i.test(
+      profile.visaStatus || ""
+    );
+  }, [profile.visaStatus]);
+
   const [minScoreThreshold, setMinScoreThreshold] = useState<number>(0);
   const [workModeFilter, setWorkModeFilter] = useState<"all" | "remote" | "hybrid" | "onsite">("all");
   const [languageFilter, setLanguageFilter] = useState<"all" | "b1_b2" | "spanish_only">("all");
   const [selectedSource, setSelectedSource] = useState<string>("all");
   const [salaryMode, setSalaryMode] = useState<"progressive_all" | "declared_only">("progressive_all");
+  const [legalFilterMode, setLegalFilterMode] = useState<"contractor_only" | "allow_us_clearance">(
+    isProfileUsAuthorized ? "allow_us_clearance" : "contractor_only"
+  );
+
+  React.useEffect(() => {
+    setLegalFilterMode(isProfileUsAuthorized ? "allow_us_clearance" : "contractor_only");
+  }, [isProfileUsAuthorized]);
 
   const handleReroll = async () => {
     const count = await rerollJobs();
@@ -146,6 +159,7 @@ export function MatchRadarPreview({
     setLanguageFilter("all");
     setSelectedSource("all");
     setSalaryMode("progressive_all");
+    setLegalFilterMode(isProfileUsAuthorized ? "allow_us_clearance" : "contractor_only");
   };
 
   const activeFiltersCount = useMemo(() => {
@@ -155,8 +169,10 @@ export function MatchRadarPreview({
     if (languageFilter !== "all") count++;
     if (selectedSource !== "all") count++;
     if (salaryMode === "declared_only") count++;
+    const defaultLegal = isProfileUsAuthorized ? "allow_us_clearance" : "contractor_only";
+    if (legalFilterMode !== defaultLegal) count++;
     return count;
-  }, [minScoreThreshold, workModeFilter, languageFilter, selectedSource, salaryMode]);
+  }, [minScoreThreshold, workModeFilter, languageFilter, selectedSource, salaryMode, legalFilterMode, isProfileUsAuthorized]);
 
   // Filtered Job List: strictly exclude non-matching or kill switch jobs + default progressive salary + deduplication
   const filteredJobs = useMemo(() => {
@@ -211,6 +227,23 @@ export function MatchRadarPreview({
       if (workModeFilter === "remote" && job.workMode !== "remote") return false;
       if (workModeFilter === "hybrid" && job.workMode !== "hybrid") return false;
       if (workModeFilter === "onsite" && job.workMode !== "onsite") return false;
+
+      // Filtro Legal y Permisos de EE. UU.
+      if (legalFilterMode === "contractor_only") {
+        const federalClearanceBlockers = [
+          /\b(public trust(\s+clearance)?|ability to obtain (a )?public trust|federal clearance|security clearance|active (secret|top secret|ts\/sci)|clearance required|security investigation)\b/i,
+          /\b(government customer|federal customer|defense contractor|government contractor|federal agency|department of defense|dod clearance)\b/i,
+          /\b(must be (a )?us citizen|us citizenship required|citizen of the united states|u\.s\. citizen(ship)?)\b/i,
+          /\b(green card (holder|only))\b/i,
+          /\b(w[- ]?2 only|no c2c|no corp[- ]to[- ]corp)\b/i,
+          /\b(401\s*\(?k\)?(\s+match(ing)?)?|flexible spending account|fsa|hsa|health savings account)\b/i,
+        ];
+        const isExplicitContractor = /\b(contractor|b2b|anywhere|worldwide|latam|global remote|work from anywhere)\b/i.test(job.description || "");
+        const fullJobText = `${job.title}\n${job.description || ""}`;
+        if (!isExplicitContractor && federalClearanceBlockers.some((reg) => reg.test(fullJobText))) {
+          return false;
+        }
+      }
 
       // Progressive Salary filter: ACTIVO POR DEFECTO
       // Si salaryMode === "progressive_all": vacantes sin salario declarado pasan, y vacantes con salario deben ser >= minExpectedSalary.
@@ -356,7 +389,7 @@ export function MatchRadarPreview({
         {/* Expandable Advanced Filters Panel */}
         {showAdvancedFilters && (
           <div className="pt-3 border-t border-slate-100 flex flex-col gap-4 animate-fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-200/70 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-200/70 text-xs">
               {/* 1. Score Mínimo ATS */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -464,8 +497,44 @@ export function MatchRadarPreview({
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-500 pt-0.5 leading-tight">
-                  Piso en CV Studio: <strong className="text-slate-700">${(profile.minSalary ?? 0).toLocaleString()} USD</strong>
-                  {(profile.minSalary ?? 0) === 0 ? " (Todo monto califica)" : ""}
+                  Piso: <strong className="text-slate-700">${(profile.minSalary ?? 0).toLocaleString()} USD</strong>
+                  {(profile.minSalary ?? 0) === 0 ? " (Todo califica)" : ""}
+                </p>
+              </div>
+
+              {/* 5. Criterio Legal y Visado EE. UU. */}
+              <div className="space-y-1.5">
+                <span className="font-bold text-slate-700 block">Permisos & Visado EE. UU.</span>
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setLegalFilterMode("contractor_only")}
+                    className={cn(
+                      "py-1 px-2 rounded-lg font-medium text-[11px] border transition-all text-left cursor-pointer",
+                      legalFilterMode === "contractor_only"
+                        ? "bg-teal-600 text-white border-teal-600 font-bold shadow-2xs"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                    )}
+                  >
+                    Solo Contractor B2B (Sin Visa)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLegalFilterMode("allow_us_clearance")}
+                    className={cn(
+                      "py-1 px-2 rounded-lg font-medium text-[11px] border transition-all text-left cursor-pointer",
+                      legalFilterMode === "allow_us_clearance"
+                        ? "bg-teal-600 text-white border-teal-600 font-bold shadow-2xs"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                    )}
+                  >
+                    Permitir Clearance / W-2
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 pt-0.5 leading-tight">
+                  {legalFilterMode === "contractor_only"
+                    ? "Descarta ofertas con Public Trust o ciudadanía."
+                    : "Habilita vacantes de gobierno y W-2 local."}
                 </p>
               </div>
             </div>
