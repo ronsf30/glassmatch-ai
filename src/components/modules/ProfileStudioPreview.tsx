@@ -394,7 +394,9 @@ export function ProfileStudioPreview() {
             <span>CV & Perfil Studio</span>
             <GlassBadge
               variant={
-                healthStatus === "operational" || healthStatus === "operational_lite"
+                aiEngineMode === "offline_deterministic"
+                  ? "sky"
+                  : healthStatus === "operational" || healthStatus === "operational_lite"
                   ? "emerald"
                   : healthStatus === "rate_limited"
                   ? "amber"
@@ -402,7 +404,9 @@ export function ProfileStudioPreview() {
               }
               size="sm"
             >
-              {healthStatus === "operational"
+              {aiEngineMode === "offline_deterministic"
+                ? "Modo Local Autónomo (0 Tokens)"
+                : healthStatus === "operational"
                 ? "Gemini 3.8 Flash (Luz Verde)"
                 : healthStatus === "operational_lite"
                 ? "Gemini 3.8 Flash-Lite (Luz Verde)"
@@ -502,12 +506,13 @@ export function ProfileStudioPreview() {
 
               <div>
                 <label className="block text-slate-600 mb-1 font-semibold">
-                  Pretensión Salarial Mínima
+                  Sueldo Anual Esperado (USD / año)
                 </label>
                 <input
                   type="text"
                   value={minSalary}
                   onChange={(e) => setMinSalary(e.target.value)}
+                  placeholder="ej. $35,000 USD / año"
                   className="w-full h-10 px-3 rounded-xl bg-white border border-teal-900/15 text-slate-900 text-xs focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-400/20 shadow-xs"
                 />
               </div>

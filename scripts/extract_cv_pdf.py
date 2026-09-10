@@ -23,7 +23,10 @@ def extract_text_from_pdf(input_data, is_base64=True):
         reader = PdfReader(stream)
         extracted = []
         for i, page in enumerate(reader.pages):
-            text = page.extract_text()
+            try:
+                text = page.extract_text(extraction_mode="layout")
+            except Exception:
+                text = page.extract_text()
             if text:
                 extracted.append(text)
                 

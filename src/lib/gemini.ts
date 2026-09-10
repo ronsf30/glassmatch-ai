@@ -857,26 +857,45 @@ function extractCvLocally(rawCvText: string, fileName: string): Partial<UserProf
     candidateName = "Candidato Profesional";
   }
 
-  // 4. Detect seniority
-  let seniority: "Junior" | "Mid" | "Senior" | "Lead" | "Principal" = "Mid";
-  let minSalary = 45000;
+  // 4. Detect seniority with strict tech domain awareness
+  let seniority: "Junior" | "Mid" | "Senior" | "Lead" | "Principal" = "Junior";
+  let minSalary = 28000;
 
-  if (/\b(lead|principal|staff|tech lead|architect|arquitecto|director)\b/i.test(positiveContext)) {
+  const topLinesContext = lines.slice(0, 8).join(" ").toLowerCase();
+  const isExplicitJunior =
+    /\b(junior|jr\.?|trainee|intern|entry level|iniciando|desarrollador junior)\b/i.test(topLinesContext) ||
+    /\b(junior|jr\.?|trainee|intern)\b/i.test(positiveContext);
+
+  const isLead =
+    /\b(tech lead|principal engineer|staff engineer|software architect|director de ingenier[ií]a)\b/i.test(
+      positiveContext
+    );
+
+  const isExplicitSenior =
+    /\b(senior developer|sr\.?\s+developer|senior engineer|sr\.?\s+engineer|senior frontend|senior backend)\b/i.test(
+      positiveContext
+    );
+
+  if (isLead) {
     seniority = "Lead";
-    minSalary = 85000;
-  } else if (
-    /\b(senior|sr\.?|avanzado|expert|\+?([5-9]|1[0-9])\s*(a[ñn]os|years))\b/i.test(positiveContext)
-  ) {
+    minSalary = 80000;
+  } else if (isExplicitSenior && !isExplicitJunior) {
     seniority = "Senior";
     minSalary = 65000;
-  } else if (/\b(junior|jr\.?|trainee|intern|entry|iniciando)\b/i.test(positiveContext)) {
+  } else if (isExplicitJunior) {
     seniority = "Junior";
     minSalary = 24000;
   } else if (
-    /\b(mid|semi[- ]senior|ssr\.?|intermediate|[2-4]\s*(a[ñn]os|years))\b/i.test(positiveContext)
+    /\b(mid|semi[- ]senior|ssr\.?|intermediate|[2-4]\s*(?:a[ñn]os|years)\s*(?:de\s+experiencia\s+en|in))\b/i.test(
+      positiveContext
+    )
   ) {
     seniority = "Mid";
-    minSalary = 42000;
+    minSalary = 38000;
+  } else {
+    // Default for digital product developers / UI designers: Mid
+    seniority = "Mid";
+    minSalary = 35000;
   }
 
   // 5. Detect tech domain exclusively from positive context
