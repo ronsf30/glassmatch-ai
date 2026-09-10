@@ -240,202 +240,210 @@ async function fetchArbeitnowJobs(keyword: string, limit: number): Promise<Parti
   }
 }
 
+export interface ExecuteSyncOptions {
+  profile?: UserProfile;
+  searchTerm?: string;
+  location?: string;
+  resultsWanted?: number;
+  existingJobIds?: string[];
+}
+
+export async function executeSync(options: ExecuteSyncOptions = {}): Promise<JobOffer[]> {
+  const {
+    profile,
+    searchTerm = "Frontend Developer",
+    location = "Remoto (Global)",
+    resultsWanted = 5,
+    existingJobIds = [],
+  } = options;
+
+  const activeProfile: UserProfile = profile || getProfileFromDb() || {
+    id: "usr-default",
+    fullName: "Ronald José Sarmiento Flores",
+    currentTitle: "Frontend Developer & UI/UX Designer",
+    seniority: "Junior",
+    extractedSkills: ["React", "Next.js", "TypeScript", "Tailwind CSS", "Figma", "UI/UX Design", "JavaScript"],
+    targetRoles: ["Frontend Developer", "UI/UX Designer", "Web Developer"],
+    workModes: ["remote"],
+    preferredLocs: ["Remoto (Global)", "LATAM", "España"],
+    minSalary: 24000,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const cleanTerm = searchTerm
+    .replace(/[\/&\\|]+/g, " ")
+    .trim()
+    .split(/\s{2,}/)[0] || "Frontend Developer";
+
+  const [linkedInJobs, remotiveJobs, jobicyJobs, arbeitnowJobs] = await Promise.all([
+    fetchLinkedInGuestJobs(cleanTerm, location, Math.ceil(resultsWanted * 0.4)),
+    fetchRemotiveJobs(cleanTerm, Math.ceil(resultsWanted * 0.3)),
+    fetchJobicyJobs(cleanTerm, Math.ceil(resultsWanted * 0.3)),
+    fetchArbeitnowJobs(cleanTerm, Math.ceil(resultsWanted * 0.3)),
+  ]);
+
+  let combined = [...linkedInJobs, ...remotiveJobs, ...jobicyJobs, ...arbeitnowJobs];
+
+  if (combined.length === 0) {
+    const fallbackList = await fetchLinkedInGuestJobs("Frontend", location, resultsWanted);
+    combined = fallbackList;
+  }
+
+  const forbiddenTitles = [
+    "service desk",
+    "help desk",
+    "helpdesk",
+    "soporte técnico",
+    "technical support",
+    "network engineer",
+    "sysadmin",
+    "telecom",
+    "cableado",
+    "sales representative",
+    "account executive",
+    "call center",
+  ];
+
+  // Deduplicación estricta contra base de datos local y lote actual
+  const existingDbRows = db
+    .prepare(
+      "SELECT url, LOWER(company) as comp, LOWER(title) as tit, id FROM JobOffer"
+    )
+    .all() as any[];
+  const existingDbUrls = new Set(
+    existingDbRows
+      .map((r) => (r.url || "").split("?")[0].toLowerCase().trim())
+      .filter(Boolean)
+  );
+  const existingDbKeys = new Set(
+    existingDbRows.map((r) => `${r.comp}:::${r.tit}`)
+  );
+  const existingDbIds = new Set(existingDbRows.map((r) => r.id));
+
+  const seenFingerprints = new Set<string>();
+  const uniqueRaw: Partial<JobOffer>[] = [];
+
+  for (const j of combined) {
+    if (uniqueRaw.length >= resultsWanted) break;
+    if (!j.url || !j.title || !j.company) continue;
+
+    const titleL = j.title.toLowerCase().trim();
+    const companyL = j.company.toLowerCase().trim();
+    if (forbiddenTitles.some((f) => titleL.includes(f))) continue;
+
+    const fp = `${companyL}:::${titleL}`;
+    const urlClean = j.url.split("?")[0].toLowerCase().trim();
+
+    // Descartar si ya fue visto en este lote
+    if (seenFingerprints.has(fp) || seenFingerprints.has(urlClean)) continue;
+    seenFingerprints.add(fp);
+    seenFingerprints.add(urlClean);
+
+    // Descartar si ya existe en la base de datos o en la sesión activa
+    if (existingJobIds.includes(j.id || "") || existingDbIds.has(j.id || "")) {
+      continue;
+    }
+    if (existingDbUrls.has(urlClean) || existingDbKeys.has(fp)) {
+      continue;
+    }
+
+    uniqueRaw.push(j);
+  }
+
+  const evaluatedJobs: JobOffer[] = [];
+
+  for (let idx = 0; idx < uniqueRaw.length; idx++) {
+    const rawJob = uniqueRaw[idx];
+    const title = rawJob.title || cleanTerm;
+    const company = rawJob.company || "Empresa Tecnológica";
+    const rawDesc = rawJob.description || `Puesto de ${title} en ${company}`;
+
+    // 1. Sanitizar el HTML de inmediato
+    const cleanDesc = sanitizeJobDescription(rawDesc);
+    const jobCandidate = {
+      title,
+      company,
+      description: cleanDesc,
+      location: rawJob.location || location,
+    };
+
+    // 2. Pre-filtro local: Descarte determinista en 0 ms y con 0 tokens consumidos
+    const localVerdict = runDeterministicKillSwitches(
+      jobCandidate,
+      activeProfile
+    );
+    if (localVerdict && !localVerdict.isMatch) {
+      continue; // Descarte silencioso (no se guarda en SQLite ni se gastan tokens)
+    }
+
+    // 3. Si supera el filtro base, procesar con analyzeJobMatchWithGemini
+    const geminiResult = await analyzeJobMatchWithGemini(
+      activeProfile,
+      cleanDesc,
+      title,
+      company
+    );
+
+    // Si la vacante no hace match o dispara un Kill Switch, se descarta por completo
+    if (
+      geminiResult.isMatch === false ||
+      geminiResult.matchScore === 0 ||
+      Boolean(geminiResult.killSwitchTriggered)
+    ) {
+      continue;
+    }
+
+    const fullJob: JobOffer = {
+      id: rawJob.id || `live-${Date.now()}-${idx}`,
+      title: title,
+      company: company,
+      location: rawJob.location || location,
+      workMode: rawJob.workMode || "remote",
+      url: rawJob.url || `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(title)}&f_WT=2`,
+      salaryText: rawJob.salaryText,
+      description: cleanDesc,
+      source: (rawJob.source as any) || "LinkedIn",
+      createdAt: rawJob.createdAt || "Publicado recientemente",
+      match: {
+        id: `match-${Date.now()}-${idx}`,
+        jobOfferId: rawJob.id || `live-${Date.now()}-${idx}`,
+        matchScore: geminiResult.matchScore,
+        isMatch: geminiResult.isMatch,
+        killSwitchTriggered: geminiResult.killSwitchTriggered,
+        reason: geminiResult.reason,
+        executiveSummary: geminiResult.executiveSummary,
+        strengths: geminiResult.strengths,
+        missingSkills: geminiResult.missingSkills,
+        interviewAdvice: geminiResult.interviewAdvice,
+        generatedPitch: geminiResult.generatedPitch,
+        languageRequirement: geminiResult.languageRequirement || "English B1/B2",
+        analyzedAt: new Date().toISOString(),
+      },
+    };
+
+    evaluatedJobs.push(fullJob);
+
+    // 4. Pausa preventiva con jitter (1.2 a 2.5 seg) para proteger la IP contra soft-bans
+    if (idx < uniqueRaw.length - 1) {
+      await sleepWithJitter(1200, 2500);
+    }
+  }
+
+  evaluatedJobs.forEach((job) => {
+    try {
+      saveJobToDb(job);
+    } catch (e) {
+      console.warn("Aviso guardando vacante en SQLite:", e);
+    }
+  });
+
+  return evaluatedJobs;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const {
-      profile,
-      searchTerm = "Frontend Developer",
-      location = "Remoto (Global)",
-      resultsWanted = 5,
-      existingJobIds = [],
-    } = body as {
-      profile?: UserProfile;
-      searchTerm?: string;
-      location?: string;
-      resultsWanted?: number;
-      existingJobIds?: string[];
-    };
-
-    const activeProfile: UserProfile = profile || getProfileFromDb() || {
-      id: "usr-default",
-      fullName: "Ronald José Sarmiento Flores",
-      currentTitle: "Frontend Developer & UI/UX Designer",
-      seniority: "Junior",
-      extractedSkills: ["React", "Next.js", "TypeScript", "Tailwind CSS", "Figma", "UI/UX Design", "JavaScript"],
-      targetRoles: ["Frontend Developer", "UI/UX Designer", "Web Developer"],
-      workModes: ["remote"],
-      preferredLocs: ["Remoto (Global)", "LATAM", "España"],
-      minSalary: 24000,
-      updatedAt: new Date().toISOString(),
-    };
-
-    const cleanTerm = searchTerm
-      .replace(/[\/&\\|]+/g, " ")
-      .trim()
-      .split(/\s{2,}/)[0] || "Frontend Developer";
-
-    const [linkedInJobs, remotiveJobs, jobicyJobs, arbeitnowJobs] = await Promise.all([
-      fetchLinkedInGuestJobs(cleanTerm, location, Math.ceil(resultsWanted * 0.4)),
-      fetchRemotiveJobs(cleanTerm, Math.ceil(resultsWanted * 0.3)),
-      fetchJobicyJobs(cleanTerm, Math.ceil(resultsWanted * 0.3)),
-      fetchArbeitnowJobs(cleanTerm, Math.ceil(resultsWanted * 0.3)),
-    ]);
-
-    let combined = [...linkedInJobs, ...remotiveJobs, ...jobicyJobs, ...arbeitnowJobs];
-
-    if (combined.length === 0) {
-      const fallbackList = await fetchLinkedInGuestJobs("Frontend", location, resultsWanted);
-      combined = fallbackList;
-    }
-
-    const forbiddenTitles = [
-      "service desk",
-      "help desk",
-      "helpdesk",
-      "soporte técnico",
-      "technical support",
-      "network engineer",
-      "sysadmin",
-      "telecom",
-      "cableado",
-      "sales representative",
-      "account executive",
-      "call center",
-    ];
-
-    // Deduplicación estricta contra base de datos local y lote actual
-    const existingDbRows = db
-      .prepare(
-        "SELECT url, LOWER(company) as comp, LOWER(title) as tit, id FROM JobOffer"
-      )
-      .all() as any[];
-    const existingDbUrls = new Set(
-      existingDbRows
-        .map((r) => (r.url || "").split("?")[0].toLowerCase().trim())
-        .filter(Boolean)
-    );
-    const existingDbKeys = new Set(
-      existingDbRows.map((r) => `${r.comp}:::${r.tit}`)
-    );
-    const existingDbIds = new Set(existingDbRows.map((r) => r.id));
-
-    const seenFingerprints = new Set<string>();
-    const uniqueRaw: Partial<JobOffer>[] = [];
-
-    for (const j of combined) {
-      if (uniqueRaw.length >= resultsWanted) break;
-      if (!j.url || !j.title || !j.company) continue;
-
-      const titleL = j.title.toLowerCase().trim();
-      const companyL = j.company.toLowerCase().trim();
-      if (forbiddenTitles.some((f) => titleL.includes(f))) continue;
-
-      const fp = `${companyL}:::${titleL}`;
-      const urlClean = j.url.split("?")[0].toLowerCase().trim();
-
-      // Descartar si ya fue visto en este lote
-      if (seenFingerprints.has(fp) || seenFingerprints.has(urlClean)) continue;
-      seenFingerprints.add(fp);
-      seenFingerprints.add(urlClean);
-
-      // Descartar si ya existe en la base de datos o en la sesión activa
-      if (existingJobIds.includes(j.id || "") || existingDbIds.has(j.id || "")) {
-        continue;
-      }
-      if (existingDbUrls.has(urlClean) || existingDbKeys.has(fp)) {
-        continue;
-      }
-
-      uniqueRaw.push(j);
-    }
-
-    const evaluatedJobs: JobOffer[] = [];
-
-    for (let idx = 0; idx < uniqueRaw.length; idx++) {
-      const rawJob = uniqueRaw[idx];
-      const title = rawJob.title || cleanTerm;
-      const company = rawJob.company || "Empresa Tecnológica";
-      const rawDesc = rawJob.description || `Puesto de ${title} en ${company}`;
-
-      // 1. Sanitizar el HTML de inmediato
-      const cleanDesc = sanitizeJobDescription(rawDesc);
-      const jobCandidate = {
-        title,
-        company,
-        description: cleanDesc,
-        location: rawJob.location || location,
-      };
-
-      // 2. Pre-filtro local: Descarte determinista en 0 ms y con 0 tokens consumidos
-      const localVerdict = runDeterministicKillSwitches(
-        jobCandidate,
-        activeProfile
-      );
-      if (localVerdict && !localVerdict.isMatch) {
-        continue; // Descarte silencioso (no se guarda en SQLite ni se gastan tokens)
-      }
-
-      // 3. Si supera el filtro base, procesar con analyzeJobMatchWithGemini
-      const geminiResult = await analyzeJobMatchWithGemini(
-        activeProfile,
-        cleanDesc,
-        title,
-        company
-      );
-
-      // Si la vacante no hace match o dispara un Kill Switch, se descarta por completo
-      if (
-        geminiResult.isMatch === false ||
-        geminiResult.matchScore === 0 ||
-        Boolean(geminiResult.killSwitchTriggered)
-      ) {
-        continue;
-      }
-
-      const fullJob: JobOffer = {
-        id: rawJob.id || `live-${Date.now()}-${idx}`,
-        title: title,
-        company: company,
-        location: rawJob.location || location,
-        workMode: rawJob.workMode || "remote",
-        url: rawJob.url || `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(title)}&f_WT=2`,
-        salaryText: rawJob.salaryText,
-        description: cleanDesc,
-        source: (rawJob.source as any) || "LinkedIn",
-        createdAt: rawJob.createdAt || "Publicado recientemente",
-        match: {
-          id: `match-${Date.now()}-${idx}`,
-          jobOfferId: rawJob.id || `live-${Date.now()}-${idx}`,
-          matchScore: geminiResult.matchScore,
-          isMatch: geminiResult.isMatch,
-          killSwitchTriggered: geminiResult.killSwitchTriggered,
-          reason: geminiResult.reason,
-          executiveSummary: geminiResult.executiveSummary,
-          strengths: geminiResult.strengths,
-          missingSkills: geminiResult.missingSkills,
-          interviewAdvice: geminiResult.interviewAdvice,
-          generatedPitch: geminiResult.generatedPitch,
-          languageRequirement: geminiResult.languageRequirement || "English B1/B2",
-          analyzedAt: new Date().toISOString(),
-        },
-      };
-
-      evaluatedJobs.push(fullJob);
-
-      // 4. Pausa preventiva con jitter (1.2 a 2.5 seg) para proteger la IP contra soft-bans
-      if (idx < uniqueRaw.length - 1) {
-        await sleepWithJitter(1200, 2500);
-      }
-    }
-
-    evaluatedJobs.forEach((job) => {
-      try {
-        saveJobToDb(job);
-      } catch (e) {
-        console.warn("Aviso guardando vacante en SQLite:", e);
-      }
-    });
+    const evaluatedJobs = await executeSync(body);
 
     return NextResponse.json({
       success: true,

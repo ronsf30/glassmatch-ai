@@ -21,6 +21,13 @@ import {
   Key,
   ExternalLink,
   Cpu,
+  Radio,
+  Bell,
+  Clock,
+  Power,
+  Terminal,
+  Send,
+  Sliders,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { LanguageLevel } from "@/types";
@@ -88,6 +95,128 @@ export function ProfileStudioPreview() {
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [aiStrategy, setAiStrategy] = useState<"smart_saving" | "maximum_precision">("smart_saving");
   const [isUpdatingStrategy, setIsUpdatingStrategy] = useState(false);
+
+  // Centinela Worker States (Fase 6)
+  const [workerEnabled, setWorkerEnabled] = useState(false);
+  const [workerIntervalHours, setWorkerIntervalHours] = useState(6);
+  const [workerThreshold, setWorkerThreshold] = useState(85);
+  const [workerWebhookUrl, setWorkerWebhookUrl] = useState("");
+  const [workerLastRun, setWorkerLastRun] = useState<string | null>(null);
+  const [workerLastStatus, setWorkerLastStatus] = useState<{
+    success: boolean;
+    evaluatedCount?: number;
+    eliteCount?: number;
+    alertedCount?: number;
+    timestamp?: string;
+    error?: string;
+  } | null>(null);
+  const [isLoadingWorkerConfig, setIsLoadingWorkerConfig] = useState(false);
+  const [isSavingWorkerConfig, setIsSavingWorkerConfig] = useState(false);
+  const [isTestingWebhook, setIsTestingWebhook] = useState(false);
+  const [isRunningWorkerNow, setIsRunningWorkerNow] = useState(false);
+  const [workerNotice, setWorkerNotice] = useState<string | null>(null);
+  const [testWebhookResult, setTestWebhookResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const loadWorkerConfig = async () => {
+    setIsLoadingWorkerConfig(true);
+    try {
+      const res = await fetch("/api/worker/config");
+      if (res.ok) {
+        const data = await res.json();
+        setWorkerEnabled(Boolean(data.enabled));
+        setWorkerIntervalHours(data.intervalHours || 6);
+        setWorkerThreshold(data.threshold || 85);
+        setWorkerWebhookUrl(data.webhookUrl || "");
+        setWorkerLastRun(data.lastRun || null);
+        setWorkerLastStatus(data.lastStatus || null);
+      }
+    } catch (err) {
+      console.warn("Aviso cargando configuracion de worker:", err);
+    } finally {
+      setIsLoadingWorkerConfig(false);
+    }
+  };
+
+  const handleSaveWorkerConfig = async () => {
+    setIsSavingWorkerConfig(true);
+    setWorkerNotice(null);
+    try {
+      const res = await fetch("/api/worker/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: workerEnabled,
+          intervalHours: workerIntervalHours,
+          threshold: workerThreshold,
+          webhookUrl: workerWebhookUrl,
+        }),
+      });
+      if (res.ok) {
+        setWorkerNotice("Configuración del Centinela guardada en SQLite.");
+        setTimeout(() => setWorkerNotice(null), 3000);
+      }
+    } catch {
+      setWorkerNotice("Error al guardar en base de datos.");
+    } finally {
+      setIsSavingWorkerConfig(false);
+    }
+  };
+
+  const handleTestWebhook = async () => {
+    if (!workerWebhookUrl.trim()) {
+      setTestWebhookResult({ success: false, message: "Ingresa una URL de webhook primero." });
+      return;
+    }
+    setIsTestingWebhook(true);
+    setTestWebhookResult(null);
+    try {
+      const res = await fetch("/api/worker/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test_webhook",
+          webhookUrl: workerWebhookUrl,
+        }),
+      });
+      const data = await res.json();
+      setTestWebhookResult({
+        success: Boolean(data.success),
+        message: data.message || (data.success ? "Alerta de prueba entregada con éxito." : "Fallo de conexión."),
+      });
+    } catch (e: any) {
+      setTestWebhookResult({ success: false, message: e?.message || "Error de red" });
+    } finally {
+      setIsTestingWebhook(false);
+    }
+  };
+
+  const handleRunWorkerNow = async () => {
+    setIsRunningWorkerNow(true);
+    setWorkerNotice(null);
+    try {
+      const res = await fetch("/api/worker/run", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setWorkerLastRun(data.timestamp);
+        setWorkerLastStatus({
+          success: true,
+          evaluatedCount: data.evaluatedCount,
+          eliteCount: data.eliteCount,
+          alertedCount: data.alertedCount,
+          timestamp: data.timestamp,
+        });
+        setWorkerNotice(
+          `Centinela ejecutado: ${data.evaluatedCount || 0} analizadas, ${data.eliteCount || 0} compatibles, ${data.alertedCount || 0} alertas enviadas.`
+        );
+      } else {
+        setWorkerNotice(`Error en Centinela: ${data.error || "Desconocido"}`);
+      }
+    } catch (err: any) {
+      setWorkerNotice(`Error de conexión: ${err.message}`);
+    } finally {
+      setIsRunningWorkerNow(false);
+    }
+  };
 
   const checkGeminiStatus = async (
     forceProbe = true,
@@ -231,6 +360,7 @@ export function ProfileStudioPreview() {
 
   useEffect(() => {
     checkBackupAiStatus(true);
+    loadWorkerConfig();
   }, []);
 
   // Keep local inputs synchronized with context profile
@@ -1375,6 +1505,204 @@ export function ProfileStudioPreview() {
                   </a>
                 </div>
               </form>
+            </div>
+          </GlassCard>
+
+          {/* Centinela y Automatizacion en Segundo Plano (Fase 6) */}
+          <GlassCard className="p-4 sm:p-5 space-y-4 bg-white/95 shadow-xs border-teal-500/25">
+            <div className="flex items-center justify-between pb-3 border-b border-teal-900/10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-700">
+                  <Radio className={`w-4 h-4 text-teal-600 ${workerEnabled ? "animate-pulse" : ""}`} />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span>Centinela Autónomo</span>
+                    <GlassBadge variant={workerEnabled ? "emerald" : "neutral"} size="sm">
+                      {workerEnabled ? "Vigilando" : "Pausado"}
+                    </GlassBadge>
+                  </h4>
+                  <p className="text-[10px] text-slate-500">
+                    Escaneo desatendido y alertas inmediatas por Webhook
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle Switch */}
+              <button
+                type="button"
+                onClick={() => setWorkerEnabled(!workerEnabled)}
+                className={`px-3 py-1 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  workerEnabled
+                    ? "bg-emerald-100 text-emerald-950 border-emerald-300 shadow-2xs"
+                    : "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200"
+                }`}
+              >
+                <Power className="w-3 h-3" />
+                <span>{workerEnabled ? "Activo" : "Inactivo"}</span>
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              {/* Frequency & Threshold Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Scan Frequency */}
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1 flex items-center gap-1 text-[11px]">
+                    <Clock className="w-3 h-3 text-teal-600" />
+                    Frecuencia de Escaneo
+                  </label>
+                  <div className="grid grid-cols-2 gap-1">
+                    {[
+                      { id: 3, label: "Cada 3h" },
+                      { id: 6, label: "Cada 6h (Óptimo)" },
+                      { id: 12, label: "Cada 12h" },
+                      { id: 24, label: "Cada 24h" },
+                    ].map((freq) => (
+                      <button
+                        key={freq.id}
+                        type="button"
+                        onClick={() => setWorkerIntervalHours(freq.id)}
+                        className={`py-1 px-1.5 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer text-center ${
+                          workerIntervalHours === freq.id
+                            ? "bg-teal-600 text-white border-teal-600 shadow-2xs font-bold"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        {freq.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Alert Threshold */}
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1 flex items-center gap-1 text-[11px]">
+                    <Sliders className="w-3 h-3 text-teal-600" />
+                    Umbral para Despachar Alerta
+                  </label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[75, 80, 85, 90].map((th) => (
+                      <button
+                        key={th}
+                        type="button"
+                        onClick={() => setWorkerThreshold(th)}
+                        className={`py-1 px-1 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer text-center ${
+                          workerThreshold === th
+                            ? "bg-teal-600 text-white border-teal-600 shadow-2xs font-bold"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        {th}%
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Solo vacantes con &gt;= {workerThreshold}% de afinidad enviarán alertas.
+                  </p>
+                </div>
+              </div>
+
+              {/* Webhook Configuration */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-slate-700 font-semibold flex items-center gap-1 text-[11px]">
+                    <Bell className="w-3 h-3 text-teal-600" />
+                    URL de Webhook (Discord / Telegram / Slack)
+                  </label>
+                  <span className="text-[10px] text-slate-400">Entrega instantánea</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={workerWebhookUrl}
+                    onChange={(e) => setWorkerWebhookUrl(e.target.value)}
+                    placeholder="https://discord.com/api/webhooks/... o Telegram bot URL"
+                    className="flex-1 h-8 px-2.5 rounded-xl bg-white border border-teal-900/15 text-slate-900 text-xs focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-400/20"
+                  />
+                  <GlassButton
+                    type="button"
+                    variant="glass"
+                    size="sm"
+                    onClick={handleTestWebhook}
+                    isLoading={isTestingWebhook}
+                    icon={<Send className="w-3 h-3 text-teal-600" />}
+                  >
+                    Probar
+                  </GlassButton>
+                </div>
+
+                {testWebhookResult && (
+                  <p
+                    className={`text-[10px] font-semibold ${
+                      testWebhookResult.success ? "text-emerald-700" : "text-rose-600"
+                    }`}
+                  >
+                    {testWebhookResult.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Actions: Save & Run Now */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <GlassButton
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSaveWorkerConfig}
+                    isLoading={isSavingWorkerConfig}
+                    icon={<Save className="w-3 h-3" />}
+                  >
+                    Guardar Configuración
+                  </GlassButton>
+
+                  <GlassButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRunWorkerNow}
+                    isLoading={isRunningWorkerNow}
+                    icon={<RefreshCw className="w-3 h-3 text-teal-600" />}
+                  >
+                    Ejecutar Centinela Ahora
+                  </GlassButton>
+                </div>
+
+                {workerNotice && (
+                  <span className="text-[10px] font-bold text-teal-800 animate-fade-in">
+                    {workerNotice}
+                  </span>
+                )}
+              </div>
+
+              {/* Status & Headless Instructions */}
+              <div className="p-3 rounded-xl bg-slate-50/90 border border-slate-200 text-[10px] text-slate-600 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-800 flex items-center gap-1">
+                    <Terminal className="w-3 h-3 text-teal-600" />
+                    Ejecución Desatendida en Windows:
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Última ejecución:{" "}
+                    {workerLastRun
+                      ? new Date(workerLastRun).toLocaleTimeString("es-ES", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          day: "numeric",
+                          month: "short",
+                        })
+                      : "Nunca"}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  Para operar 24/7 sin el navegador abierto, haz doble clic en{" "}
+                  <code className="bg-slate-200/80 px-1 py-0.5 rounded text-slate-800 font-mono text-[10px]">
+                    Iniciar-Centinela.bat
+                  </code>{" "}
+                  o ejecuta <code className="bg-slate-200/80 px-1 py-0.5 rounded text-slate-800 font-mono text-[10px]">node scripts/worker.mjs</code>.
+                </p>
+              </div>
             </div>
           </GlassCard>
         </div>

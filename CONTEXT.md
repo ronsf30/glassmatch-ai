@@ -1,6 +1,6 @@
 # CONTEXT.md — Documento Maestro de Contexto y Auditoria Tecnica
 ## Proyecto: GlassMatch AI (Caribbean Sea Glass Edition)
-**Version:** 0.3.0 (Fase 5 Mini-CRM Glass Pipeline & Preparacion de Postulacion)  
+**Version:** 0.4.0 (Fase 6 Centinela Autonomo & Alertas por Webhook)  
 **Fecha de corte:** 10 de Septiembre de 2026  
 **Repositorio Oficial:** https://github.com/ronsf30/glassmatch-ai (Rama: main)  
 **Proposito del documento:** Proporcionar una radiografia tecnica exhaustiva, rigurosa y sin ambiguedades de toda la arquitectura, modelos de datos, endpoints, logica algoritmica y estado de desarrollo de la aplicacion para revision, auditoria de seguridad, analisis de codigo y evaluacion por personal de ingenieria y agentes de IA externos.
@@ -14,9 +14,10 @@ GlassMatch AI es una plataforma local y privada disenada para ingenieros de soft
 El sistema se rige por los siguientes principios no negociables:
 1. **Confianza Cero ATS (Zero-Trust ATS Engine):** Toda oferta laboral entrante se presume incompatible (0% Match) por defecto. Solo tras superar una bateria de 5 Kill Switches deterministas y semanticos se autoriza el calculo de afinidad y se persiste en el inventario.
 2. **Cascada de Inteligencia Artificial en 4 Niveles:** Garantiza operatividad ininterrumpida combinando modelos de ultima generacion con aislamiento multi-nube y fallback determinista local con cero consumo de tokens.
-3. **Privacidad Absoluta (Local-First):** La base de datos relacional reside exclusivamente en el equipo del usuario mediante SQLite nativo con transaccionalidad WAL, sin telemetria ni dependencias de bases de datos centralizadas en la nube.
-4. **Diseno de Autor Caribbean Sea Glass:** Interfaz grafica de alto contraste inspirada en iOS Glass Design y visionOS, orientada a reducir la fatiga cognitiva durante la busqueda laboral.
-5. **Filosofia "Standing on Giants":** Aprovecha herramientas de codigo abierto consolidadas (JobSpy, Next.js 16, SQLite, Tailwind v4) orquestadas mediante logica semantica avanzada.
+3. **Centinela Autonomo y Vigilancia en Segundo Plano (Fase 6):** Operacion desatendida mediante temporizadores en la aplicacion y un demonio independiente en Node.js que escanea portales y despacha alertas instantaneas a Webhooks de Discord, Telegram o Slack ante vacantes de alta afinidad (>= 85%).
+4. **Privacidad Absoluta (Local-First):** La base de datos relacional reside exclusivamente en el equipo del usuario mediante SQLite nativo con transaccionalidad WAL, sin telemetria ni dependencias de bases de datos centralizadas en la nube.
+5. **Diseno de Autor Caribbean Sea Glass:** Interfaz grafica de alto contraste inspirada en iOS Glass Design y visionOS, orientada a reducir la fatiga cognitiva durante la busqueda laboral.
+6. **Filosofia "Standing on Giants":** Aprovecha herramientas de codigo abierto consolidadas (JobSpy, Next.js 16, SQLite, Tailwind v4) orquestadas mediante logica semantica avanzada.
 
 ---
 
@@ -36,6 +37,7 @@ El sistema se rige por los siguientes principios no negociables:
     - `gemini-3.8-flash-lite` (`gemini-flash-lite-latest`): Analisis de alta velocidad con ahorro estricto de tokens.
   - **Secundario (Multi-Cloud Groq):** Groq Cloud API (`llama-3.3-70b-versatile` / `llama-3.1-8b-instant`) con generacion JSON estricta.
   - **Terciario (Motor Heuristico Local):** Evaluador determinista puro en TypeScript (0 tokens, operable offline).
+- **Sistema de Alertas y Webhooks:** Modulo nativo `src/lib/notifications.ts` con formateo automatico para Discord Embeds, Telegram Markdown y Slack.
 - **Scrapers Auxiliares:** Python 3 con librerias `jobspy` y `pypdf`, con forzado de encoding UTF-8 para compatibilidad absoluta en Windows.
 - **Entorno de Red:** Resolucion local forzada IPv4 (`127.0.0.1:3000`).
 
@@ -48,7 +50,8 @@ glassmatch-ai/
 ├── .env.local                     # Variables locales de entorno (GEMINI_API_KEY, GROQ_API_KEY) [GitIgnore]
 ├── .env.local.example             # Plantilla segura de variables de entorno
 ├── .gitignore                     # Exclusion de .env, *.db, *.db-wal, *.db-shm y __pycache__
-├── Iniciar-GlassMatch.bat         # Script de inicio rapido en 1 clic para Windows
+├── Iniciar-GlassMatch.bat         # Script de inicio rapido de la aplicacion en Windows
+├── Iniciar-Centinela.bat          # Script de ejecucion del Centinela Daemon en segundo plano
 ├── package.json                   # Dependencias de produccion y desarrollo
 ├── tsconfig.json                  # Configuracion TypeScript en modo estricto
 ├── next.config.ts                 # Configuracion Next.js con soporte Turbopack
@@ -62,7 +65,8 @@ glassmatch-ai/
 │   ├── extract_cv_pdf.py          # Extractor auxiliar de texto PDF con pypdf y stdout UTF-8 forzado
 │   ├── jobspy_scraper.py          # Scraper multi-portal open-source (LinkedIn, Indeed, Glassdoor)
 │   ├── purge_db.js                # Utilidad de purga y mantenimiento de base de datos
-│   └── requirements.txt           # Dependencias Python
+│   ├── requirements.txt           # Dependencias Python
+│   └── worker.mjs                 # Script autonomo Node.js del Centinela (ejecucion desatendida 24/7)
 └── src/
     ├── app/
     │   ├── globals.css            # Clases de utilidad y diseno Caribbean Sea Glass
@@ -80,7 +84,10 @@ glassmatch-ai/
     │       ├── match/route.ts            # POST evaluacion aislada candidato vs vacante
     │       ├── pitch/route.ts            # POST generador de pitches de contacto por tono
     │       ├── profile/route.ts          # GET/PUT perfil persistido en SQLite
-    │       └── sync/route.ts             # POST sincronizacion y descarte Kill Switch
+    │       ├── sync/route.ts             # POST sincronizacion y descarte Kill Switch (exporta executeSync)
+    │       └── worker/
+    │           ├── config/route.ts       # GET/POST configuracion del Centinela en SQLite y prueba de webhook
+    │           └── run/route.ts          # POST ejecucion autonoma, deteccion elite y despacho de alertas
     ├── components/
     │   ├── layout/
     │   │   ├── AmbientGlow.tsx           # Efectos ambientales difusos
@@ -88,7 +95,7 @@ glassmatch-ai/
     │   ├── modules/
     │   │   ├── MatchRadarPreview.tsx     # Estacion de busqueda, filtros avanzados y feed de vacantes
     │   │   ├── GlassPipelinePreview.tsx  # Kanban bidireccional de 5 estados con metricas de embudo
-    │   │   ├── ProfileStudioPreview.tsx  # Estudio de CV, limites tecnicos y configuracion de IA
+    │   │   ├── ProfileStudioPreview.tsx  # Estudio de CV, limites tecnicos, configuracion de IA y Centinela
     │   │   ├── JobInspectorDrawer.tsx    # Drawer lateral para inspeccion, simulacro de entrevista y pitch
     │   │   ├── SyncJobsModal.tsx         # Modal para scraping masivo multi-portal
     │   │   ├── QuickAddModal.tsx         # Modal para analisis manual rapido de vacantes
@@ -100,11 +107,12 @@ glassmatch-ai/
     │       ├── GlassCard.tsx             # Tarjeta de cristal con borde de luz y desenfoque
     │       └── MatchRing.tsx             # Anillo SVG circular para puntaje ATS
     ├── context/
-    │   └── AppContext.tsx                # Estado global y sincronizacion reactiva con SQLite
+    │   └── AppContext.tsx                # Estado global, sincronizacion reactiva y runner in-app del Centinela
     ├── lib/
     │   ├── ai-providers.ts               # Integracion de cliente Groq Cloud y OpenAI compatible
     │   ├── db.ts                         # Conexion e inicializacion nativa de SQLite
     │   ├── gemini.ts                     # Cascada de IA en 4 niveles y bateria de 5 Kill Switches
+    │   ├── notifications.ts              # Despachador universal de Webhooks (Discord, Telegram, Slack)
     │   └── utils.ts                      # Deduplicacion canonica, parseo salarial progresivo y utilidades
     └── types/
         └── index.ts                      # Definiciones exhaustivas de tipos TypeScript
@@ -118,7 +126,7 @@ La persistencia se gestiona de forma local e independiente en `prisma/dev.db` ba
 
 ### 4.1. Tabla `AppConfig`
 Gestiona la configuracion dinamica en caliente sin necesidad de reiniciar el servidor:
-* `key TEXT PRIMARY KEY`: Clave de configuracion (`gemini_api_key`, `gemini_strategy`, `backup_ai_key`, `backup_ai_provider`, `backup_ai_model`, `ai_engine_mode`).
+* `key TEXT PRIMARY KEY`: Clave de configuracion (`gemini_api_key`, `gemini_strategy`, `backup_ai_key`, `backup_ai_provider`, `backup_ai_model`, `ai_engine_mode`, `worker_enabled`, `worker_interval_hours`, `worker_threshold`, `worker_webhook_url`, `worker_last_run`, `worker_last_status`).
 * `value TEXT NOT NULL`: Valor serializado.
 * `updatedAt TEXT NOT NULL`: Marca temporal ISO.
 
@@ -216,93 +224,61 @@ Toda operacion semantica fluye a traves del despachador en `src/lib/gemini.ts`:
 
 ---
 
-## 6. Deduplicacion Canonica y Calibracion Salarial Progresiva
+## 6. Centinela Autonomo y Alertas en Segundo Plano (Fase 6)
 
-### 6.1. Deduplicacion Canonica por Fingerprint (`getJobFingerprint`)
-Para evitar ofertas repetidas entre portales (ej. una misma vacante republicada en LinkedIn y Remotive con titulos ligeramente distintos):
-* Se normalizan titulos y nombres de empresa eliminando sufijos corporativos (`Inc`, `LLC`, `Corp`, `S.A.`, `Technologies`).
-* Se genera una huella de normalizacion: `empresa_normalizada|titulo_normalizado`.
-* En `/api/sync`, cualquier oferta entrante cuya huella coincida con una existente es descartada de forma inmediata antes de consumir tiempo o tokens.
+### 6.1. Arquitectura Dual de Ejecucion
+El Centinela opera bajo dos modalidades complementarias:
+1. **Ejecucion In-App (`AppContext.tsx`):**
+   * Mientras la aplicacion esta abierta en el navegador, un temporizador reactivo consulta la configuracion en SQLite cada 10 minutos. Si ha transcurrido el intervalo programado (ej. 6 horas desde la ultima ejecucion), dispara de forma transparente el escaneo en `/api/worker/run`.
+   * Si detecta vacantes con afinidad >= umbral, lanza una notificacion nativa de escritorio del sistema operativo (*Web Notification API*).
+2. **Demonio Autonomo Headless (`scripts/worker.mjs` y `Iniciar-Centinela.bat`):**
+   * Proceso Node.js independiente que puede dejarse en ejecucion continua en la consola o programarse mediante el Programador de Tareas de Windows.
+   * Realiza peticiones no bloqueantes a `/api/worker/run`, registra logs con marca temporal y respeta los intervalos de espera sin consumir recursos de navegador.
 
-### 6.2. Logica Salarial Progresiva
-* **Fuente Unica de Verdad:** El sueldo deseado se configura exclusivamente en el Estudio de Perfil (`UserProfile.minSalary`).
-* **Valor Cero Honrado:** Si el usuario define `$0`, el sistema procesa el valor `0` sin revertir a valores arbitrarios por defecto.
-* **Evaluacion Progresiva por Defecto (`meetsProgressiveSalaryExpectation`):**
-  1. Si la vacante declara salario explicito: es aprobada si el limite superior es mayor o igual al piso del perfil.
-  2. Si la vacante es "A convenir / No declarado": **no se descarta por defecto**, preservando oportunidades viables para negociacion.
+### 6.2. Despachador Universal de Webhooks (`src/lib/notifications.ts`)
+* **Deteccion Automatica de Plataforma:**
+  * **Discord:** Detecta URLs `discord.com/api/webhooks` y emite payloads enriquecidos con tarjetas visuales (*Embeds*), color esmeralda (#10B981) para ofertas elite, detalles salariales, fortalezas detectadas y enlace directo.
+  * **Telegram:** Detecta URLs `api.telegram.org/bot` y envia mensajes formateados en Markdown directo al chat o canal del usuario.
+  * **Slack / Generico:** Envia mensajes estructurados en texto plano JSON.
+* **Boton de Prueba en Interfaz:** Permite validar la recepcion del mensaje de prueba en el canal antes de activar el centinela.
 
 ---
 
 ## 7. Modulos de Experiencia de Usuario y Pipeline CRM
 
 ### 7.1. Estacion Central de Comando y Match Radar (`MatchRadarPreview.tsx`)
-* **Barra Unificada de Busqueda y Extraccion en Vivo:**
-  * Campo de busqueda en tiempo real sobre las vacantes en memoria y base de datos local.
-  * Boton integrado **"Buscar en Vivo"**: transfiere el termino de busqueda al modal de sincronizacion externa para extraer ofertas frescas desde LinkedIn, Remotive, Jobicy o Arbeitnow.
-  * Boton de rebarajado ("Dices") para explorar 10 ofertas distintas del inventario local.
-* **Panel Desplegable de Filtros Avanzados (5 Columnas):**
-  1. *Umbral de Afinidad ATS:* Control deslizante continuo (0% a 95%).
-  2. *Modalidad de Trabajo:* Botones para Todas, Solo Remoto, Hibrido y Presencial.
-  3. *Filtro de Idioma:* Todos, Compatible B1/B2 (sin C1/C2 oral) y Solo Espanol.
-  4. *Criterio Salarial:* Alternancia entre "Progresivo (>= piso o a convenir)" y "Solo Salario Publico Declarado".
-  5. *Permisos & Visado EE. UU.:* Conmutador entre "Solo Contractor B2B (Sin Visa)" y "Permitir Clearance / W-2 / EE. UU.".
-  6. *Portales de Origen:* Filtro por portal de empleo.
-  7. *Boton de Restablecer:* Retorna a los parametros optimos calibrados del perfil.
+* Barra unificada de busqueda y extraccion en vivo.
+* Panel desplegable de 5 columnas de filtros avanzados (afinidad, modalidad, idioma, criterio salarial progresivo respetando `$0`, permisos y visado EE. UU.).
+* Visualizador circular MatchRing escalable.
 
 ### 7.2. Mini-CRM Glass Pipeline (`GlassPipelinePreview.tsx`)
-* **Tablero Kanban Bidireccional de 5 Estados:**
-  * `saved` ("Radar / Guardadas")
-  * `applied` ("Postuladas")
-  * `interviewing` ("En Entrevistas")
-  * `offered` ("Ofertas Recibidas")
-  * `rejected` ("Archivadas / Rechazadas")
-* **Conmutador de Visibilidad de Archivadas:**
-  * Boton *"Ver Archivadas (N)"* / *"Ocultar Archivadas"* para mantener la interfaz despejada con 4 columnas o expandida a 5 columnas segun preferencia.
-* **Controles Bidireccionales en Cada Tarjeta:**
-  * Botones de transicion rapida `<` y `>` para avanzar o retroceder de columna sin abrir modales.
-  * Selector desplegable directo (`<select>`) para saltar a cualquier etapa en un solo clic.
-  * Boton rapido de archivado y restauracion al radar.
-* **Metricas de Conversion en Tiempo Real:**
-  * Conteo por columna y totales en embudo.
-  * Calculo automatico de **Tasa de Respuesta** (`(Entrevistas + Ofertas) / Total Postuladas`) y **Tasa de Oferta** (`Ofertas / Entrevistas`).
-  * Selector de importacion rapida de vacantes no rastreadas del radar al embudo.
-* **Acciones Contextuales de Preparacion:**
-  * Acceso directo a **"Simular Entrevista"** (abre el simulador con 3 preguntas de Hiring Manager generadas por Gemini y respuestas modelo).
-  * Acceso directo a **"Pitch Reclutador"** (abre el mensaje de presentacion con selector de tono Directo, Ejecutivo o Impacto).
-  * Acceso a **"+ Nota"** / **"Ver Nota"**.
+* Tablero Kanban bidireccional de 5 estados (`saved`, `applied`, `interviewing`, `offered`, `rejected`).
+* Conmutador para mostrar u ocultar la columna de archivadas.
+* Controles rapidos `<` y `>` mas selector desplegable de salto directo en tarjetas.
+* Metricas de conversion en tiempo real (Tasa de Respuesta y Tasa de Oferta).
+* Acciones contextuales de preparacion ("Simular Entrevista" y "Pitch Reclutador").
 
-### 7.3. Modal de Notas Estructuradas ([`JobNotesModal.tsx`](file:///c:/Users/ronsf/Documents/Yegoo/glassmatch-ai/src/components/modules/JobNotesModal.tsx))
-* Pastillas de etiquetas de progreso para insercion en 1 clic con estampa de fecha automatica:
-  * *"Primera ronda tecnica completada"*
-  * *"Prueba tecnica enviada"*
-  * *"Esperando feedback de RRHH"*
-  * *"Segunda entrevista con Hiring Manager"*
-  * *"Oferta economica recibida a evaluar"*
-  * *"Rechazo amable / Guardado para futuro"*
-* Sincronizado con la tabla `ApplicationTracker` de SQLite.
+### 7.3. Modal de Notas Estructuradas (`JobNotesModal.tsx`)
+* Etiquetas de progreso en 1 clic con insercion de fecha automatica en SQLite.
+
+### 7.4. Panel del Centinela en Profile Studio (`ProfileStudioPreview.tsx`)
+* Tarjeta dedicada para configurar estado (Activo/Inactivo), intervalo (3h, 6h, 12h, 24h), umbral de alerta (75% a 90%), URL de Webhook, prueba de conexion, ejecucion inmediata y monitor de estado.
 
 ---
 
 ## 8. Estado del Proyecto y Fases Faltantes (Roadmap de Evolucion)
 
-### 8.1. Fases Completadas (1 a 5)
-* **Fase 1: Arquitectura Base y Diseno Glass UI:** Next.js 16 Turbopack, Tailwind v4, Framer Motion, sistema de componentes de cristal caribeno.
+### 8.1. Fases Completadas (1 a 6)
+* **Fase 1: Arquitectura Base y Diseno Glass UI:** Next.js 16 Turbopack, Tailwind v4, Framer Motion, diseno Caribbean Sea Glass.
 * **Fase 2: Ingestion de CV y Perfil del Candidato:** Multimodal OCR con Gemini Base64, fallback en Python UTF-8, heuristica de seniority, deteccion de limites tecnicos con negaciones (`no domino` -> `excludedSkills`) y persistencia relacional SQLite.
 * **Fase 3: Motor ATS Zero-Trust y Estacion Unificada:** Deduplicacion canonica por huella, barra unificada de busqueda y extraccion en vivo, panel de 5 columnas de filtros avanzados y evaluacion salarial progresiva respetando `$0`.
 * **Fase 4: Redundancia Multi-Cloud y Blindaje Legal:** Cascada en 4 niveles (Gemini Flash/Lite -> Google alternativo -> Groq Cloud Llama 3.3 70B -> Motor Local 0 tokens), interruptor de motor en cabecera y blindaje dinamico de autorizaciones de seguridad nacional y permisos W-2.
 * **Fase 5: Mini-CRM Glass Pipeline y Preparacion:** Tablero Kanban bidireccional de 5 estados, metricas de embudo y conversion en tiempo real, preparacion contextual en tarjetas y notas estructuradas con etiquetas rapidas.
+* **Fase 6: Automatizacion Desatendida y Alertas por Webhook:** Demonio autonomo en segundo plano (`scripts/worker.mjs`, `Iniciar-Centinela.bat`), temporizador in-app, despachador universal de Webhooks (Discord, Telegram, Slack) con prueba de conexion y panel de administracion en Estudio de Perfil.
 
 ### 8.2. Fases Faltantes Planificadas (Post-Core)
 
-#### Fase 6: Automatizacion Desatendida y Alertas en Segundo Plano (Daemon / Workers)
-* **Objetivo:** Convertir GlassMatch AI en un centinela autonomo que rastree vacantes sin requerir que el usuario abra la aplicacion.
-* **Alcance Tecnico:**
-  1. Tarea programada en segundo plano (*Background Cron Worker*) configurable por el usuario (ej. ejecucion cada 6, 12 o 24 horas).
-  2. Deteccion proactiva de "Vacantes Elite" (Afinidad semantica >= 85%).
-  3. Sistema de alertas discretas locales en Windows (notificaciones nativas del sistema operativo) o webhook privado (bot de Telegram / Discord propio del usuario) con enlace directo a la oferta.
-  4. Prevencion de sobre-extraccion mediante limites de peticiones y rotacion de intervalos.
-
-#### Fase 7: Soberania de Datos, Respaldo y Analitica Historica
+#### Fase 7: Soberania de Datos, Respaldo y Analitica Historica (Analytics & Portability)
 * **Objetivo:** Ofrecer control y portabilidad total de los datos del candidato y analisis estadistico de su proceso de busqueda.
 * **Alcance Tecnico:**
   1. Exportador universal de datos a formatos abiertos: CSV, JSON y reporte consolidado de postulaciones en PDF.
@@ -312,7 +288,7 @@ Para evitar ofertas repetidas entre portales (ej. una misma vacante republicada 
      * Grafico de dispersion de salarios ofrecidos vs habilidades demandadas.
      * Registro de motivos de descarte y empresas bloqueadas.
 
-#### Fase 8: Sastrería de CV por Oferta (Resume Tailoring para ATS Externos)
+#### Fase 8: Sastreria de CV por Oferta (Resume Tailoring para ATS Externos)
 * **Objetivo:** Asistir al candidato en la adaptacion etica de su CV para superar los filtros ATS propios de cada empresa.
 * **Alcance Tecnico:**
   1. Analizador diferencial de brechas lexicas entre el CV actual y la descripcion de la vacante aprobada.
@@ -331,6 +307,7 @@ Para evitar ofertas repetidas entre portales (ej. una misma vacante republicada 
 | **Concurrencia de Base de Datos** | Aprobado | SQLite con `journal_mode = WAL`, `busy_timeout = 5000` y transacciones explicitas para evitar bloqueos de archivo. |
 | **Consistencia de Tipos** | Aprobado | TypeScript en modo estricto en el 100% del codigo fuente, verificado mediante compilador Turbopack. |
 | **Integridad de Salida de IA** | Aprobado | Forzado de esquemas JSON estructurados (`response_format: { type: "json_object" }` y `response_mime_type: "application/json"`). |
+| **Automatizacion y Webhooks** | Aprobado | Despacho seguro con timeout de 6 segundos y aislamiento de errores para evitar caidas del servidor. |
 | **Cumplimiento de Estilo** | Aprobado | Cero emojis en codigo, mensajes de commit, logs y documentacion formal de arquitectura. |
 
 ---

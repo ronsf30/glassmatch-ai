@@ -167,6 +167,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadFromSQLite();
   }, []);
 
+  // Centinela en segundo plano (In-App Worker Runner)
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+
+    async function checkWorker() {
+      try {
+        const res = await fetch("/api/worker/config");
+        if (!res.ok) return;
+        const cfg = await res.json();
+        if (!cfg.enabled) return;
+
+        const lastRun = cfg.lastRun ? new Date(cfg.lastRun).getTime() : 0;
+        const intervalMs = (cfg.intervalHours || 6) * 3600 * 1000;
+        const now = Date.now();
+
+        if (now - lastRun >= intervalMs) {
+          const runRes = await fetch("/api/worker/run", { method: "POST" });
+          if (runRes.ok) {
+            const runData = await runRes.json();
+            if (runData.evaluatedCount > 0) {
+              setJobs((prev) => {
+                const existingIds = new Set(prev.map((j) => j.id));
+                const newJobs = (runData.jobs || []).filter((j: JobOffer) => !existingIds.has(j.id));
+                return [...newJobs, ...prev];
+              });
+              if (runData.eliteCount > 0 && typeof window !== "undefined" && "Notification" in window) {
+                if (Notification.permission === "granted") {
+                  new Notification(`GlassMatch AI: ${runData.eliteCount} vacante(s) elite detectada(s) por el Centinela`);
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Aviso en ejecucion de Centinela in-app:", err);
+      }
+    }
+
+    const initialTimeout = setTimeout(checkWorker, 12000);
+    timer = setInterval(checkWorker, 10 * 60 * 1000);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
   const updateProfile = (updates: Partial<UserProfile>) => {
     if (updates.cvFileName) {
       setCvFileName(updates.cvFileName);
