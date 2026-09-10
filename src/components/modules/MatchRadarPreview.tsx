@@ -17,6 +17,8 @@ import {
   Cpu,
   Sparkles,
   TrendingUp,
+  SlidersHorizontal,
+  RotateCcw,
 } from "lucide-react";
 import { JobOffer, JobLanguageRequirement } from "@/types";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -34,7 +36,7 @@ import {
 interface MatchRadarPreviewProps {
   onSelectJob: (job: JobOffer) => void;
   onTrackJob: (jobId: string) => void;
-  onOpenSync?: () => void;
+  onOpenSync?: (query?: string) => void;
   onRerollSuccess?: (count: number) => void;
 }
 
@@ -123,26 +125,47 @@ export function MatchRadarPreview({
 }: MatchRadarPreviewProps) {
   const { jobs, profile, rerollJobs, isRerolling, blacklistCompany, aiEngineMode } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterScore85, setFilterScore85] = useState(false);
-  const [filterRemoteOnly, setFilterRemoteOnly] = useState(false);
-  const [filterSalaryProgressive, setFilterSalaryProgressive] = useState(false);
-  const [filterSalaryDeclaredOnly, setFilterSalaryDeclaredOnly] = useState(false);
-  const [filterLanguageB1B2, setFilterLanguageB1B2] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  // Advanced Filters State (Manual & Customizable)
+  const [minScoreThreshold, setMinScoreThreshold] = useState<number>(0);
+  const [workModeFilter, setWorkModeFilter] = useState<"all" | "remote" | "hybrid" | "onsite">("all");
+  const [languageFilter, setLanguageFilter] = useState<"all" | "b1_b2" | "spanish_only">("all");
   const [selectedSource, setSelectedSource] = useState<string>("all");
+  const [salaryMode, setSalaryMode] = useState<"progressive_all" | "declared_only">("progressive_all");
 
   const handleReroll = async () => {
     const count = await rerollJobs();
     onRerollSuccess?.(count);
   };
 
-  // Filtered Job List: strictly exclude non-matching or kill switch jobs + progressive salary + deduplication
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setMinScoreThreshold(0);
+    setWorkModeFilter("all");
+    setLanguageFilter("all");
+    setSelectedSource("all");
+    setSalaryMode("progressive_all");
+  };
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (minScoreThreshold > 0) count++;
+    if (workModeFilter !== "all") count++;
+    if (languageFilter !== "all") count++;
+    if (selectedSource !== "all") count++;
+    if (salaryMode === "declared_only") count++;
+    return count;
+  }, [minScoreThreshold, workModeFilter, languageFilter, selectedSource, salaryMode]);
+
+  // Filtered Job List: strictly exclude non-matching or kill switch jobs + default progressive salary + deduplication
   const filteredJobs = useMemo(() => {
     const blacklist = (profile.blacklistCompanies || []).map((b) =>
       b.toLowerCase()
     );
 
     const termLower = searchTerm.trim().toLowerCase();
-    const minExpectedSalary = profile.minSalary || 35000;
+    const minExpectedSalary = profile.minSalary ?? 0;
 
     const candidates = jobs.filter((job) => {
       // Excluir de inmediato vacantes que no hacen match o dispararon un Kill Switch
@@ -174,35 +197,37 @@ export function MatchRadarPreview({
         if (!matchesSearch) return false;
       }
 
-      // Source filter
+      // Source portal filter
       if (selectedSource !== "all" && job.source !== selectedSource) {
         return false;
       }
 
-      // Score filter: Elite >=85
-      if (filterScore85 && (job.match?.matchScore ?? 0) < 85) return false;
-
-      // Remote filter
-      if (filterRemoteOnly && job.workMode !== "remote") return false;
-
-      // Progressive Salary filter:
-      // Si filterSalaryProgressive está activo, se descartan ofertas cuyo salario declarado esté por debajo del piso salarial.
-      // Ofertas que paguen más (o que igualen el piso) se aprueban.
-      if (filterSalaryProgressive) {
-        const check = meetsProgressiveSalaryExpectation(
-          job.salaryText,
-          minExpectedSalary,
-          !filterSalaryDeclaredOnly
-        );
-        if (!check.meets) return false;
-      } else if (filterSalaryDeclaredOnly && !job.salaryText) {
+      // Score threshold filter
+      if (minScoreThreshold > 0 && (job.match?.matchScore ?? 0) < minScoreThreshold) {
         return false;
       }
 
-      // Language filter: exclude C1/C2 if user wants B1/B2 compatible
-      if (filterLanguageB1B2) {
-        const req = job.match?.languageRequirement;
-        if (req === "English C1/C2") return false;
+      // Work mode filter
+      if (workModeFilter === "remote" && job.workMode !== "remote") return false;
+      if (workModeFilter === "hybrid" && job.workMode !== "hybrid") return false;
+      if (workModeFilter === "onsite" && job.workMode !== "onsite") return false;
+
+      // Progressive Salary filter: ACTIVO POR DEFECTO
+      // Si salaryMode === "progressive_all": vacantes sin salario declarado pasan, y vacantes con salario deben ser >= minExpectedSalary.
+      // Si salaryMode === "declared_only": se descartan vacantes sin salario y las restantes deben ser >= minExpectedSalary.
+      const allowUndisclosed = salaryMode === "progressive_all";
+      const salaryCheck = meetsProgressiveSalaryExpectation(
+        job.salaryText,
+        minExpectedSalary,
+        allowUndisclosed
+      );
+      if (!salaryCheck.meets) return false;
+
+      // Language filter
+      if (languageFilter === "b1_b2") {
+        if (job.match?.languageRequirement === "English C1/C2") return false;
+      } else if (languageFilter === "spanish_only") {
+        if (job.match?.languageRequirement !== "Spanish") return false;
       }
 
       return true;
@@ -226,11 +251,10 @@ export function MatchRadarPreview({
     profile.minSalary,
     searchTerm,
     selectedSource,
-    filterScore85,
-    filterRemoteOnly,
-    filterSalaryProgressive,
-    filterSalaryDeclaredOnly,
-    filterLanguageB1B2,
+    minScoreThreshold,
+    workModeFilter,
+    languageFilter,
+    salaryMode,
   ]);
 
   // Language badge renderer (minimalist)
@@ -254,146 +278,256 @@ export function MatchRadarPreview({
 
   return (
     <div className="space-y-5">
-      {/* Barra Superior de Filtros y Búsqueda */}
+      {/* Central Command Station: Unified Search & Live Extraction */}
       <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex flex-col gap-3">
-        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
-          {/* Search Input */}
+        <div className="flex flex-col md:flex-row gap-2.5 items-stretch md:items-center">
+          {/* Unified Search Input */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar por cargo, tecnología (React, Tailwind, Next), empresa o ubicación..."
+              placeholder="Buscar en vacantes o ingresar cargo para extraer en vivo (ej. UI UX, Frontend, React)..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-all"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  onOpenSync?.(searchTerm.trim());
+                }
+              }}
+              className="w-full h-11 pl-10 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-all"
             />
           </div>
 
-          {/* Reroll Button */}
-          <GlassButton
-            variant="primary"
-            size="md"
-            icon={
-              isRerolling ? (
-                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+          {/* Action Buttons: Buscar en Vivo + Filtros Avanzados + Reroll */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Primary Action: Buscar en Vivo */}
+            <GlassButton
+              variant="primary"
+              size="md"
+              icon={<Globe2 className="w-4 h-4" />}
+              onClick={() => onOpenSync?.(searchTerm.trim())}
+              title="Buscar y extraer nuevas vacantes de portales externos (LinkedIn, Remotive, Jobicy, Arbeitnow)"
+              className="h-11 shadow-sm"
+            >
+              Buscar en Vivo
+            </GlassButton>
+
+            {/* Toggle Advanced Filters */}
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={cn(
+                "h-11 px-3.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-2 shrink-0",
+                showAdvancedFilters || activeFiltersCount > 0
+                  ? "bg-teal-50 text-teal-950 border-teal-500/40 shadow-xs font-bold"
+                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
+              )}
+              title="Ajustar filtros avanzados"
+            >
+              <SlidersHorizontal className="w-4 h-4 text-teal-700" />
+              <span className="hidden sm:inline">Filtros Avanzados</span>
+              {activeFiltersCount > 0 && (
+                <span className="w-5 h-5 rounded-full bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+
+            {/* Reroll Button (Compact) */}
+            <button
+              type="button"
+              onClick={handleReroll}
+              disabled={isRerolling}
+              title="Rebarajar 10 ofertas del pool disponible"
+              className={cn(
+                "h-11 w-11 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-all cursor-pointer shrink-0",
+                isRerolling && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {isRerolling ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-teal-600" />
               ) : (
-                <Dices className="w-4 h-4 text-white" />
-              )
-            }
-            isLoading={isRerolling}
-            onClick={handleReroll}
-            className="shrink-0"
-          >
-            {isRerolling ? "Actualizando..." : "Actualizar 10 Ofertas"}
-          </GlassButton>
-        </div>
-
-        {/* Quick Filter Pills */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setFilterLanguageB1B2(!filterLanguageB1B2)}
-              className={cn(
-                "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5",
-                filterLanguageB1B2
-                  ? "bg-teal-50 text-teal-900 border-teal-500 font-bold"
-                  : "bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-100"
+                <Dices className="w-4 h-4 text-slate-600" />
               )}
-            >
-              <Globe2 className="w-3.5 h-3.5 text-teal-600" />
-              <span>Compatible con mi Inglés</span>
-            </button>
-
-            <button
-              onClick={() => setFilterScore85(!filterScore85)}
-              className={cn(
-                "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                filterScore85
-                  ? "bg-emerald-50 text-emerald-900 border-emerald-500 font-bold"
-                  : "bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-100"
-              )}
-            >
-              Afinidad Alta (&gt; 85%)
-            </button>
-
-            <button
-              onClick={() => setFilterRemoteOnly(!filterRemoteOnly)}
-              className={cn(
-                "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                filterRemoteOnly
-                  ? "bg-teal-50 text-teal-900 border-teal-500 font-bold"
-                  : "bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-100"
-              )}
-            >
-              Solo Remoto
-            </button>
-
-            <button
-              onClick={() => setFilterSalaryProgressive(!filterSalaryProgressive)}
-              className={cn(
-                "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5",
-                filterSalaryProgressive
-                  ? "bg-amber-50 text-amber-950 border-amber-500 font-bold shadow-2xs"
-                  : "bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-100"
-              )}
-            >
-              <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
-              <span>Sueldo ≥ ${(profile.minSalary || 35000).toLocaleString()} USD</span>
-            </button>
-
-            <button
-              onClick={() => setFilterSalaryDeclaredOnly(!filterSalaryDeclaredOnly)}
-              className={cn(
-                "px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                filterSalaryDeclaredOnly
-                  ? "bg-slate-800 text-white border-slate-900 font-bold"
-                  : "bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-100"
-              )}
-            >
-              Solo Salario Público
             </button>
           </div>
-
-          {/* Portals filter */}
-          <div className="flex items-center gap-1 text-xs text-slate-600">
-            {["all", "LinkedIn", "Remotive", "Jobicy", "Arbeitnow"].map((src) => (
-              <button
-                key={src}
-                onClick={() => setSelectedSource(src)}
-                className={cn(
-                  "px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer",
-                  selectedSource === src
-                    ? "bg-teal-600 text-white font-semibold shadow-2xs"
-                    : "bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-                )}
-              >
-                {src === "all" ? "Todos" : src}
-              </button>
-            ))}
-          </div>
         </div>
+
+        {/* Expandable Advanced Filters Panel */}
+        {showAdvancedFilters && (
+          <div className="pt-3 border-t border-slate-100 flex flex-col gap-4 animate-fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-200/70 text-xs">
+              {/* 1. Score Mínimo ATS */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-700">Umbral Score ATS</span>
+                  <span className="font-bold text-teal-800">
+                    {minScoreThreshold === 0 ? "Sin mínimo" : `≥ ${minScoreThreshold}%`}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="95"
+                  step="5"
+                  value={minScoreThreshold}
+                  onChange={(e) => setMinScoreThreshold(Number(e.target.value))}
+                  className="w-full accent-teal-600 cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-slate-400">
+                  <span>0% (Todos)</span>
+                  <span>70%</span>
+                  <span>95% (Elite)</span>
+                </div>
+              </div>
+
+              {/* 2. Modalidad */}
+              <div className="space-y-1.5">
+                <span className="font-bold text-slate-700 block">Modalidad</span>
+                <div className="grid grid-cols-2 gap-1">
+                  {[
+                    { id: "all", label: "Todas" },
+                    { id: "remote", label: "Solo Remoto" },
+                    { id: "hybrid", label: "Híbrido" },
+                    { id: "onsite", label: "Presencial" },
+                  ].map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setWorkModeFilter(mode.id as any)}
+                      className={cn(
+                        "py-1.5 px-2 rounded-lg font-medium text-[11px] border transition-all text-center cursor-pointer",
+                        workModeFilter === mode.id
+                          ? "bg-teal-600 text-white border-teal-600 font-bold shadow-2xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      )}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Requisito de Idioma */}
+              <div className="space-y-1.5">
+                <span className="font-bold text-slate-700 block">Filtro de Idioma</span>
+                <div className="flex flex-col gap-1">
+                  {[
+                    { id: "all", label: "Todos los idiomas" },
+                    { id: "b1_b2", label: "Compatible B1/B2 (Sin C1/C2 oral)" },
+                    { id: "spanish_only", label: "Solo Español nativo" },
+                  ].map((lang) => (
+                    <button
+                      key={lang.id}
+                      type="button"
+                      onClick={() => setLanguageFilter(lang.id as any)}
+                      className={cn(
+                        "py-1 px-2 rounded-lg font-medium text-[11px] border transition-all text-left cursor-pointer",
+                        languageFilter === lang.id
+                          ? "bg-teal-600 text-white border-teal-600 font-bold shadow-2xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      )}
+                    >
+                      {lang.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Criterio Salarial */}
+              <div className="space-y-1.5">
+                <span className="font-bold text-slate-700 block">Criterio Salarial</span>
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSalaryMode("progressive_all")}
+                    className={cn(
+                      "py-1 px-2 rounded-lg font-medium text-[11px] border transition-all text-left cursor-pointer",
+                      salaryMode === "progressive_all"
+                        ? "bg-teal-600 text-white border-teal-600 font-bold shadow-2xs"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                    )}
+                  >
+                    Progresivo (≥ piso o a convenir)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSalaryMode("declared_only")}
+                    className={cn(
+                      "py-1 px-2 rounded-lg font-medium text-[11px] border transition-all text-left cursor-pointer",
+                      salaryMode === "declared_only"
+                        ? "bg-teal-600 text-white border-teal-600 font-bold shadow-2xs"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                    )}
+                  >
+                    Solo Salario Público Declarado
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 pt-0.5 leading-tight">
+                  Piso en CV Studio: <strong className="text-slate-700">${(profile.minSalary ?? 0).toLocaleString()} USD</strong>
+                  {(profile.minSalary ?? 0) === 0 ? " (Todo monto califica)" : ""}
+                </p>
+              </div>
+            </div>
+
+            {/* Portals and Reset Row */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-slate-500">Portal:</span>
+                {["all", "LinkedIn", "Remotive", "Jobicy", "Arbeitnow"].map((src) => (
+                  <button
+                    key={src}
+                    type="button"
+                    onClick={() => setSelectedSource(src)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer",
+                      selectedSource === src
+                        ? "bg-teal-600 text-white font-semibold shadow-2xs"
+                        : "bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200"
+                    )}
+                  >
+                    {src === "all" ? "Todos" : src}
+                  </button>
+                ))}
+              </div>
+
+              {activeFiltersCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="flex items-center gap-1 text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restablecer Filtros</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Feed Counter & Sync Trigger */}
+      {/* Feed Counter */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-2 text-xs text-slate-600">
         <div className="flex items-center gap-2">
           <span>
             Mostrando <strong className="text-slate-900 font-bold">{filteredJobs.length}</strong> ofertas únicas (Deduplicadas) de{" "}
-            <strong className="text-slate-900 font-bold">{jobs.length}</strong> en base de datos
+            <strong className="text-slate-900 font-bold">{jobs.length}</strong> en radar
           </span>
-          {filterSalaryProgressive && (
+          {profile.minSalary !== undefined && profile.minSalary > 0 && (
             <span className="hidden md:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300">
-              Piso progresivo: ≥ ${(profile.minSalary || 35000).toLocaleString()} USD
+              Piso salarial: ≥ ${profile.minSalary.toLocaleString()} USD
             </span>
           )}
         </div>
-        <button
-          onClick={onOpenSync}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold border border-teal-200 transition-all cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-teal-600" />
-          <span>Sincronizar Ofertas en Vivo</span>
-        </button>
+        {activeFiltersCount > 0 && (
+          <button
+            type="button"
+            onClick={handleResetFilters}
+            className="text-teal-700 hover:text-teal-900 underline font-semibold text-xs cursor-pointer"
+          >
+            Restablecer {activeFiltersCount} filtro{activeFiltersCount > 1 ? "s" : ""}
+          </button>
+        )}
       </div>
 
       {/* Lista de Vacantes: Escaneo en 3 Segundos */}
@@ -402,15 +536,15 @@ export function MatchRadarPreview({
           <GlassCard className="p-10 text-center text-slate-500">
             <p className="text-sm font-medium">
               {jobs.length === 0
-                ? "No hay vacantes en el radar. Inicia una sincronización en vivo para consultar ofertas remotas activas."
+                ? "No hay vacantes en el radar. Inicia una búsqueda en vivo para consultar ofertas remotas activas."
                 : "No se encontraron vacantes con los filtros seleccionados."}
             </p>
             <div className="flex justify-center gap-3 mt-4">
               <GlassButton
                 variant="primary"
                 size="sm"
-                icon={<RefreshCw className="w-4 h-4" />}
-                onClick={onOpenSync}
+                icon={<Globe2 className="w-4 h-4" />}
+                onClick={() => onOpenSync?.(searchTerm.trim())}
               >
                 Buscar Ofertas en Vivo
               </GlassButton>
@@ -418,15 +552,7 @@ export function MatchRadarPreview({
                 <GlassButton
                   variant="glass"
                   size="sm"
-                  onClick={() => {
-                    setSearchTerm("");
-                    setFilterScore85(false);
-                    setFilterRemoteOnly(false);
-                    setFilterSalaryProgressive(false);
-                    setFilterSalaryDeclaredOnly(false);
-                    setFilterLanguageB1B2(false);
-                    setSelectedSource("all");
-                  }}
+                  onClick={handleResetFilters}
                 >
                   Restablecer Filtros
                 </GlassButton>

@@ -22,18 +22,29 @@ interface SyncJobsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSyncSuccess?: (newCount: number) => void;
+  initialQuery?: string;
 }
 
 export function SyncJobsModal({
   isOpen,
   onClose,
   onSyncSuccess,
+  initialQuery,
 }: SyncJobsModalProps) {
   const { profile, jobs, addNewJob } = useApp();
 
   const [searchTerm, setSearchTerm] = useState(
-    profile.currentTitle || profile.targetRoles[0] || "Frontend Developer"
+    initialQuery || profile.currentTitle || profile.targetRoles[0] || "Frontend Developer"
   );
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (initialQuery && initialQuery.trim()) {
+        setSearchTerm(initialQuery.trim());
+      }
+    }
+  }, [isOpen, initialQuery]);
+
   const [location, setLocation] = useState("Remoto (Global)");
   const [resultsWanted, setResultsWanted] = useState(5);
   const [hoursOld, setHoursOld] = useState(72);

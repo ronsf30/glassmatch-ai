@@ -21,7 +21,13 @@ function GlassMatchApp() {
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isSyncOpen, setIsSyncOpen] = useState(false);
+  const [syncInitialQuery, setSyncInitialQuery] = useState("");
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+
+  const handleOpenSync = (query?: string) => {
+    setSyncInitialQuery(query || "");
+    setIsSyncOpen(true);
+  };
 
   const handleSelectJob = (job: JobOffer) => {
     setSelectedJob(job);
@@ -40,7 +46,7 @@ function GlassMatchApp() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onQuickAdd={() => setIsQuickAddOpen(true)}
-        onOpenSync={() => setIsSyncOpen(true)}
+        onOpenSync={() => handleOpenSync()}
         onOpenTutorial={() => setIsTutorialOpen(true)}
       />
 
@@ -58,7 +64,7 @@ function GlassMatchApp() {
               <MatchRadarPreview
                 onSelectJob={handleSelectJob}
                 onTrackJob={handleTrackJob}
-                onOpenSync={() => setIsSyncOpen(true)}
+                onOpenSync={handleOpenSync}
                 onRerollSuccess={(count) =>
                   showToast(`Actualización completada: ${count} nuevas vacantes incorporadas al radar.`)
                 }
@@ -133,6 +139,7 @@ function GlassMatchApp() {
       <SyncJobsModal
         isOpen={isSyncOpen}
         onClose={() => setIsSyncOpen(false)}
+        initialQuery={syncInitialQuery}
         onSyncSuccess={(count) =>
           showToast(`Sincronizadas ${count} nuevas ofertas laborales.`)
         }

@@ -59,7 +59,9 @@ export function ProfileStudioPreview() {
   const [fullName, setFullName] = useState(profile.fullName);
   const [currentTitle, setCurrentTitle] = useState(profile.currentTitle);
   const [minSalary, setMinSalary] = useState(
-    profile.minSalary ? `$${profile.minSalary.toLocaleString()} USD` : "$95,000 USD"
+    profile.minSalary !== undefined && profile.minSalary !== null
+      ? `$${profile.minSalary.toLocaleString()} USD`
+      : "$35,000 USD"
   );
   const [primaryRole, setPrimaryRole] = useState(profile.targetRoles[0] || "");
   const [visaStatus, setVisaStatus] = useState(
@@ -237,7 +239,7 @@ export function ProfileStudioPreview() {
       setFullName(profile.fullName);
       setCurrentTitle(profile.currentTitle);
       setPrimaryRole(profile.targetRoles[0] || "");
-      if (profile.minSalary) {
+      if (profile.minSalary !== undefined && profile.minSalary !== null) {
         setMinSalary(`$${profile.minSalary.toLocaleString()} USD`);
       }
       if (profile.visaStatus) {
@@ -263,7 +265,9 @@ export function ProfileStudioPreview() {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    const salaryNum = parseInt(minSalary.replace(/[^0-9]/g, ""), 10) || 95000;
+    const rawDigits = minSalary.replace(/[^0-9]/g, "");
+    const parsed = parseInt(rawDigits, 10);
+    const salaryNum = !isNaN(parsed) ? parsed : 0;
     updateProfile({
       fullName,
       currentTitle,

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Sparkles, Radar, Kanban, UserCheck, Plus, Zap, RefreshCw, HelpCircle, Cloud, Cpu } from "lucide-react";
+import { Sparkles, Radar, Kanban, UserCheck, Plus, Zap, HelpCircle, Cloud, Cpu } from "lucide-react";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { ActiveTab } from "@/types";
 import { cn } from "@/lib/utils";
@@ -168,15 +168,6 @@ export function GlassHeader({
             title="Ver Tutorial y Guía Rápida"
           >
             <span className="hidden sm:inline">Tutorial</span>
-          </GlassButton>
-
-          <GlassButton
-            variant="glass"
-            size="sm"
-            icon={<RefreshCw className="w-3.5 h-3.5 text-teal-700" />}
-            onClick={onOpenSync}
-          >
-            <span className="hidden sm:inline">Sincronizar</span>
           </GlassButton>
 
           <GlassButton
